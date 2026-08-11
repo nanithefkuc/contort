@@ -1,0 +1,148 @@
+//! Error type shared by the deformed Reed–Solomon families.
+
+use core::fmt;
+
+use gs_engine::{ConfigError, DecodeError};
+
+/// Failure while building, encoding, or decoding a deformed GRS code.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Error {
+    /// The column-multiplier vector length disagreed with the domain length.
+    MultiplierCount {
+        /// Evaluation-domain length `n`.
+        expected: usize,
+        /// Supplied multiplier count.
+        got: usize,
+    },
+    /// A column multiplier was zero; every multiplier must be nonzero.
+    ZeroMultiplier {
+        /// Index of the offending multiplier.
+        index: usize,
+    },
+    /// The dimension `k` was zero or not strictly below the code length `n`.
+    InvalidDimension {
+        /// Requested dimension `k`.
+        dimension: usize,
+        /// Evaluation-domain length `n`.
+        length: usize,
+    },
+    /// The dimension `k` was below the family minimum (Roth–Lempel needs
+    /// `k >= 2` for its exceptional coordinate).
+    MinimumDimension {
+        /// Requested dimension `k`.
+        dimension: usize,
+        /// Smallest admissible dimension.
+        minimum: usize,
+    },
+    /// A twist degree offset `t` was outside the range `1..=n-k`.
+    TwistOffset {
+        /// Offending offset `t`.
+        offset: usize,
+        /// Largest admissible offset `n-k`.
+        max: usize,
+    },
+    /// A twist hook `h` was not strictly below the dimension `k`.
+    TwistHook {
+        /// Offending hook `h`.
+        hook: usize,
+        /// Dimension `k`.
+        dimension: usize,
+    },
+    /// A twist coefficient `η` was zero.
+    ZeroTwistCoefficient {
+        /// Index of the offending twist.
+        index: usize,
+    },
+    /// Two twists shared the same `(t, h)` pair.
+    DuplicateTwist {
+        /// Shared offset `t`.
+        offset: usize,
+        /// Shared hook `h`.
+        hook: usize,
+    },
+    /// A message slice did not have exactly `k` symbols.
+    MessageLength {
+        /// Expected dimension `k`.
+        expected: usize,
+        /// Supplied message length.
+        got: usize,
+    },
+    /// A codeword slice did not have exactly `n` symbols.
+    CodewordLength {
+        /// Expected length `n`.
+        expected: usize,
+        /// Supplied codeword length.
+        got: usize,
+    },
+    /// A received slice did not have exactly `n` symbols.
+    ReceivedLength {
+        /// Expected length `n`.
+        expected: usize,
+        /// Supplied received length.
+        got: usize,
+    },
+    /// The ambient Guruswami–Sudan configuration was infeasible.
+    Configuration(ConfigError),
+    /// The ambient Guruswami–Sudan decode failed.
+    Decoding(DecodeError),
+}
+
+impl From<ConfigError> for Error {
+    fn from(error: ConfigError) -> Self {
+        Self::Configuration(error)
+    }
+}
+
+impl From<DecodeError> for Error {
+    fn from(error: DecodeError) -> Self {
+        Self::Decoding(error)
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MultiplierCount { expected, got } => write!(
+                formatter,
+                "column-multiplier count {got} does not match domain length {expected}"
+            ),
+            Self::ZeroMultiplier { index } => {
+                write!(formatter, "column multiplier at index {index} is zero")
+            }
+            Self::InvalidDimension { dimension, length } => write!(
+                formatter,
+                "dimension {dimension} must satisfy 1 <= k < n for length {length}"
+            ),
+            Self::MinimumDimension { dimension, minimum } => write!(
+                formatter,
+                "dimension {dimension} is below the family minimum {minimum}"
+            ),
+            Self::TwistOffset { offset, max } => {
+                write!(formatter, "twist offset {offset} is outside 1..={max}")
+            }
+            Self::TwistHook { hook, dimension } => {
+                write!(formatter, "twist hook {hook} is not below dimension {dimension}")
+            }
+            Self::ZeroTwistCoefficient { index } => {
+                write!(formatter, "twist coefficient at index {index} is zero")
+            }
+            Self::DuplicateTwist { offset, hook } => {
+                write!(formatter, "twists share the pair (t={offset}, h={hook})")
+            }
+            Self::MessageLength { expected, got } => {
+                write!(formatter, "message length {got} does not match dimension {expected}")
+            }
+            Self::CodewordLength { expected, got } => {
+                write!(formatter, "codeword length {got} does not match code length {expected}")
+            }
+            Self::ReceivedLength { expected, got } => {
+                write!(formatter, "received length {got} does not match code length {expected}")
+            }
+            Self::Configuration(error) => write!(formatter, "ambient GS configuration: {error}"),
+            Self::Decoding(error) => write!(formatter, "ambient GS decode: {error}"),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for Error {}
