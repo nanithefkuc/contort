@@ -29,6 +29,8 @@ extern crate alloc;
 
 mod code;
 mod decode;
+#[cfg(feature = "internals")]
+mod descriptor;
 mod error;
 mod eval;
 mod extend;
@@ -42,6 +44,11 @@ mod twist;
 
 pub use code::TgrsCode;
 pub use decode::{TgrsDecoder, TgrsScratch};
+#[cfg(feature = "internals")]
+pub use descriptor::{
+    BaseCode, BaseGeometry, CanonicalDescriptor, DESCRIPTOR_VERSION, DecoderCapability,
+    ExtendCoord, TransformOp, TransformWord,
+};
 pub use error::Error;
 pub use extend::{ExtendedGrsCode, ExtendedGrsDecoder, ExtendedGrsScratch};
 pub use folded::FoldedRsCode;

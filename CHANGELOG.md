@@ -57,3 +57,10 @@ and releases follow [Semantic Versioning](https://semver.org/).
   `RothLempelCode` is now the single-functional `f_{k-2} + δ·f_{k-1}` instance of
   this engine, decoded by the shared puncture / Guruswami–Sudan / re-encode
   reduction with no duplicated scorer.
+- Added the internals-gated canonical transform descriptor over Twist, Möbius,
+  Puncture, Extend, Fold, and Interleave. L1–L4 normalization composes maps,
+  unions/cancels domain edits, merges twist collisions, and multiplies grouping
+  parameters; the versioned descriptor is no larger than its generating word
+  and strictly contracts law-absorbing words. Frozen wire bytes, concrete-family
+  encoder equality, composed encoder/decoder equality, capability downgrades,
+  checked overflow, and allocation-free descriptor encoding are tested.

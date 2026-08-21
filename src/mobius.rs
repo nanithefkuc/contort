@@ -137,6 +137,64 @@ impl<F: ButterflyKernels> MobiusMap<F> {
     pub fn is_orbit_preserving(&self) -> bool {
         (self.b.is_zero() && self.c.is_zero()) || (self.a.is_zero() && self.d.is_zero())
     }
+
+    /// The unique map sending three distinct points `(p0, p1, p2)` to
+    /// `(0, 1, ∞)`.
+    ///
+    /// `PGL(2, F)` is sharply 3-transitive on `P¹(F)`, so this is the canonical
+    /// representative used to drop a net Möbius transform's slot cost to zero
+    /// over a plain (untwisted) message space. The three points must be
+    /// distinct or the resulting map is singular.
+    #[must_use]
+    pub fn from_three_points(p0: F::Elem, p1: F::Elem, p2: F::Elem) -> Self {
+        // φ(x) = ((x − p0)(p1 − p2)) / ((x − p2)(p1 − p0)).
+        let a = p1.sub(p2);
+        let c = p1.sub(p0);
+        Self {
+            a,
+            b: p0.mul(a),
+            c,
+            d: p2.mul(c),
+        }
+    }
+
+    /// The identity map `x ↦ x` (matrix `[[1, 0], [0, 1]]`).
+    #[must_use]
+    pub fn identity() -> Self {
+        Self {
+            a: F::Elem::ONE,
+            b: F::Elem::ZERO,
+            c: F::Elem::ZERO,
+            d: F::Elem::ONE,
+        }
+    }
+
+    /// The canonical projective representative: every coefficient divided by
+    /// the first nonzero of `(a, b, c, d)`, so that leading entry becomes `1`.
+    ///
+    /// Scaling the matrix does not change the map, so this picks one member of
+    /// each `PGL(2, F)` class — the scale-normalized form the descriptor stores.
+    #[must_use]
+    pub fn normalized(&self) -> Self {
+        let pivot = [self.a, self.b, self.c, self.d]
+            .into_iter()
+            .find(|value| !value.is_zero())
+            .unwrap_or(F::Elem::ONE);
+        let inverse = pivot.inv();
+        Self {
+            a: self.a.mul(inverse),
+            b: self.b.mul(inverse),
+            c: self.c.mul(inverse),
+            d: self.d.mul(inverse),
+        }
+    }
+
+    /// Whether `φ` is the identity of `PGL(2, F)` (a nonzero scalar multiple of
+    /// the identity matrix).
+    #[must_use]
+    pub fn is_identity(&self) -> bool {
+        self.normalized() == Self::identity()
+    }
 }
 
 impl<F: ButterflyKernels> Clone for MobiusMap<F> {

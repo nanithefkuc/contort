@@ -22,6 +22,8 @@ use contort::{
     PuncturedGrsCode, PuncturedGrsScratch, RothLempelCode, RothLempelScratch, TgrsCode,
     TgrsScratch, Twist, UniqueDecode,
 };
+#[cfg(feature = "internals")]
+use contort::{BaseCode, ExtendCoord, TransformOp, TransformWord};
 use fgf::Gf16;
 use fgf::gf16::Elem;
 
@@ -103,6 +105,8 @@ fn warm_decode_does_not_allocate() {
     puncture_steady_state();
     extend_steady_state();
     mobius_steady_state();
+    #[cfg(feature = "internals")]
+    descriptor_encode_is_allocation_free();
 }
 
 fn folded_encode_is_allocation_free() {
@@ -359,5 +363,35 @@ fn mobius_steady_state() {
     assert_eq!(
         allocs, 0,
         "warm Möbius list_decode_into allocated {allocs} times"
+    );
+}
+
+#[cfg(feature = "internals")]
+fn descriptor_encode_is_allocation_free() {
+    let points: Vec<Elem> = (0..N as u8).map(e).collect();
+    let domain = EvaluationDomain::<Gf16>::arbitrary(points).unwrap();
+    let base = BaseCode::with_id(91, domain, ramp_multipliers(N), 2).unwrap();
+    let mut word = TransformWord::new(base);
+    word.push(TransformOp::Twist(Twist::new(1, 0, e(3))))
+        .push(TransformOp::Mobius(MobiusMap::new(
+            e(2),
+            e(1),
+            Elem::ZERO,
+            Elem::ONE,
+        )))
+        .push(TransformOp::Puncture(7))
+        .push(TransformOp::Extend(ExtendCoord::new(
+            vec![Elem::ONE, e(5)],
+            e(9),
+        )));
+    let descriptor = word.normalize().unwrap();
+    let message = [e(11), e(29)];
+    let mut codeword = vec![Elem::ZERO; descriptor.length()];
+
+    descriptor.encode_into(&message, &mut codeword).unwrap();
+    let ((), allocs) = measured(|| descriptor.encode_into(&message, &mut codeword).unwrap());
+    assert_eq!(
+        allocs, 0,
+        "normalized descriptor encode allocated {allocs} times"
     );
 }
