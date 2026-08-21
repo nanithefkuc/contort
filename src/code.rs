@@ -138,11 +138,7 @@ impl<F: ButterflyKernels> TgrsCode<F> {
     /// Encode a `k`-symbol message into an `n`-symbol codeword.
     ///
     /// `message` must have exactly `k` symbols and `codeword` exactly `n`.
-    pub fn encode_into(
-        &self,
-        message: &[F::Elem],
-        codeword: &mut [F::Elem],
-    ) -> Result<(), Error> {
+    pub fn encode_into(&self, message: &[F::Elem], codeword: &mut [F::Elem]) -> Result<(), Error> {
         let dimension = self.dimension;
         let length = self.length();
         if message.len() != dimension {

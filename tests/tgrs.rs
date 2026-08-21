@@ -7,8 +7,8 @@
 //! decoder must agree with the ball's cardinality.
 
 use contort::{
-    AlekhnovichLimits, EvaluationDomain, ParameterLimits, Polynomial, TgrsCode, Error,
-    TgrsScratch, Twist, UniqueDecode,
+    AlekhnovichLimits, Error, EvaluationDomain, ParameterLimits, Polynomial, TgrsCode, TgrsScratch,
+    Twist, UniqueDecode,
 };
 use fgf::Gf8;
 use fgf::gf8::Elem;
@@ -97,15 +97,19 @@ fn check_against_oracle(
 
     let decoded = decoded_messages(&candidates, code.dimension());
     let oracle = brute_force_ball(code, received, decoder.target_radius());
-    assert_eq!(decoded, oracle, "list decode disagreed with brute-force ball");
+    assert_eq!(
+        decoded, oracle,
+        "list decode disagreed with brute-force ball"
+    );
 
     let unique = decoder.unique_decode(received, &mut scratch).unwrap();
     match oracle.len() {
         0 => assert!(matches!(unique, UniqueDecode::NoCandidate)),
         1 => {
             let message = unique.message().expect("unique message");
-            let coefficients: Vec<Elem> =
-                (0..code.dimension()).map(|d| message.coefficient(d)).collect();
+            let coefficients: Vec<Elem> = (0..code.dimension())
+                .map(|d| message.coefficient(d))
+                .collect();
             assert_eq!(coefficients, oracle[0]);
         }
         _ => assert!(matches!(unique, UniqueDecode::Ambiguous)),
@@ -278,19 +282,34 @@ fn construction_rejects_bad_parameters() {
 
     // t must lie in 1..=n-k = 1..=6.
     assert_eq!(
-        TgrsCode::new(subspace(), ramp_multipliers(n), 2, vec![Twist::new(0, 0, e(2))])
-            .unwrap_err(),
+        TgrsCode::new(
+            subspace(),
+            ramp_multipliers(n),
+            2,
+            vec![Twist::new(0, 0, e(2))]
+        )
+        .unwrap_err(),
         Error::TwistOffset { offset: 0, max: 6 }
     );
     assert_eq!(
-        TgrsCode::new(subspace(), ramp_multipliers(n), 2, vec![Twist::new(7, 0, e(2))])
-            .unwrap_err(),
+        TgrsCode::new(
+            subspace(),
+            ramp_multipliers(n),
+            2,
+            vec![Twist::new(7, 0, e(2))]
+        )
+        .unwrap_err(),
         Error::TwistOffset { offset: 7, max: 6 }
     );
 
     assert_eq!(
-        TgrsCode::new(subspace(), ramp_multipliers(n), 2, vec![Twist::new(1, 2, e(2))])
-            .unwrap_err(),
+        TgrsCode::new(
+            subspace(),
+            ramp_multipliers(n),
+            2,
+            vec![Twist::new(1, 2, e(2))]
+        )
+        .unwrap_err(),
         Error::TwistHook {
             hook: 2,
             dimension: 2
@@ -298,8 +317,13 @@ fn construction_rejects_bad_parameters() {
     );
 
     assert_eq!(
-        TgrsCode::new(subspace(), ramp_multipliers(n), 2, vec![Twist::new(1, 0, Elem::ZERO)])
-            .unwrap_err(),
+        TgrsCode::new(
+            subspace(),
+            ramp_multipliers(n),
+            2,
+            vec![Twist::new(1, 0, Elem::ZERO)]
+        )
+        .unwrap_err(),
         Error::ZeroTwistCoefficient { index: 0 }
     );
 

@@ -61,7 +61,9 @@ impl<F: FieldKernels> Copy for Twist<F> {}
 
 impl<F: FieldKernels> PartialEq for Twist<F> {
     fn eq(&self, other: &Self) -> bool {
-        self.offset == other.offset && self.hook == other.hook && self.coefficient == other.coefficient
+        self.offset == other.offset
+            && self.hook == other.hook
+            && self.coefficient == other.coefficient
     }
 }
 

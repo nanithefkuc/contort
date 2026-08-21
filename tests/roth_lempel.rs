@@ -98,15 +98,19 @@ fn check_against_oracle(
 
     let decoded = decoded_messages(&candidates, code.dimension());
     let oracle = brute_force_ball(code, received, decoder.target_radius());
-    assert_eq!(decoded, oracle, "list decode disagreed with brute-force ball");
+    assert_eq!(
+        decoded, oracle,
+        "list decode disagreed with brute-force ball"
+    );
 
     let unique = decoder.unique_decode(received, &mut scratch).unwrap();
     match oracle.len() {
         0 => assert!(matches!(unique, UniqueDecode::NoCandidate)),
         1 => {
             let message = unique.message().expect("unique message");
-            let coefficients: Vec<Elem> =
-                (0..code.dimension()).map(|d| message.coefficient(d)).collect();
+            let coefficients: Vec<Elem> = (0..code.dimension())
+                .map(|d| message.coefficient(d))
+                .collect();
             assert_eq!(coefficients, oracle[0]);
         }
         _ => assert!(matches!(unique, UniqueDecode::Ambiguous)),
@@ -159,7 +163,8 @@ fn nonzero_twist_matches_oracle() {
 #[test]
 fn zero_twist_matches_oracle() {
     let n = 8;
-    let code = RothLempelCode::new(punctured_domain(n), ramp_multipliers(n), 2, Elem::ZERO).unwrap();
+    let code =
+        RothLempelCode::new(punctured_domain(n), ramp_multipliers(n), 2, Elem::ZERO).unwrap();
     let decoder = code
         .list_decoder(2, parameter_limits(), root_limits())
         .unwrap();
