@@ -17,8 +17,10 @@ use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use contort::{
-    AlekhnovichLimits, EvaluationDomain, FoldedRsCode, InterleavedRsCode, ParameterLimits,
-    Polynomial, RothLempelCode, RothLempelScratch, TgrsCode, TgrsScratch, Twist, UniqueDecode,
+    AlekhnovichLimits, EvaluationDomain, ExtendedGrsCode, ExtendedGrsScratch, FoldedRsCode,
+    InterleavedRsCode, MobiusGrsCode, MobiusGrsScratch, MobiusMap, ParameterLimits, Polynomial,
+    PuncturedGrsCode, PuncturedGrsScratch, RothLempelCode, RothLempelScratch, TgrsCode,
+    TgrsScratch, Twist, UniqueDecode,
 };
 use fgf::Gf16;
 use fgf::gf16::Elem;
@@ -98,6 +100,9 @@ fn warm_decode_does_not_allocate() {
     roth_lempel_steady_state();
     folded_encode_is_allocation_free();
     interleaved_encode_is_allocation_free();
+    puncture_steady_state();
+    extend_steady_state();
+    mobius_steady_state();
 }
 
 fn folded_encode_is_allocation_free() {
@@ -220,5 +225,139 @@ fn roth_lempel_steady_state() {
     assert_eq!(
         allocs, 0,
         "warm Roth–Lempel unique_decode allocated {allocs} times"
+    );
+}
+
+fn puncture_steady_state() {
+    let points: Vec<Elem> = (0..16u8).map(e).collect();
+    let domain = EvaluationDomain::<Gf16>::arbitrary(points).unwrap();
+    let code = PuncturedGrsCode::new(domain, ramp_multipliers(N), 2, vec![8]).unwrap();
+    let effective = code.length();
+    let decoder = code
+        .list_decoder(TAU, parameter_limits(), root_limits())
+        .unwrap();
+
+    let mut c0 = vec![Elem::ZERO; effective];
+    let mut c1 = vec![Elem::ZERO; effective];
+    code.encode_into(&[e(1), e(0)], &mut c0).unwrap();
+    code.encode_into(&[e(0), e(1)], &mut c1).unwrap();
+    let received = midpoint(&c0, &c1);
+
+    let mut codeword = vec![Elem::ZERO; effective];
+    code.encode_into(&[e(4), e(9)], &mut codeword).unwrap();
+    let ((), allocs) = measured(|| code.encode_into(&[e(4), e(9)], &mut codeword).unwrap());
+    assert_eq!(allocs, 0, "warm punctured encode allocated {allocs} times");
+
+    let mut scratch = PuncturedGrsScratch::<Gf16>::new();
+    decoder.prepare_scratch(&mut scratch).unwrap();
+    let mut output: Vec<Polynomial<Gf16>> = Vec::new();
+    let candidates = decoder
+        .list_decode_into(&received, &mut scratch, &mut output)
+        .unwrap();
+    assert!(
+        candidates >= 2,
+        "expected a multi-candidate list, got {candidates}"
+    );
+    let _ = decoder.unique_decode(&received, &mut scratch).unwrap();
+
+    let (count, allocs) = measured(|| {
+        decoder
+            .list_decode_into(&received, &mut scratch, &mut output)
+            .unwrap()
+    });
+    assert_eq!(count, candidates);
+    assert_eq!(
+        allocs, 0,
+        "warm punctured list_decode_into allocated {allocs} times"
+    );
+}
+
+fn extend_steady_state() {
+    let points: Vec<Elem> = (0..(N - 1) as u8).map(e).collect();
+    let domain = EvaluationDomain::<Gf16>::arbitrary(points).unwrap();
+    let code = ExtendedGrsCode::projective(domain, ramp_multipliers(N), 2).unwrap();
+    let n = code.length();
+    let decoder = code
+        .list_decoder(TAU, parameter_limits(), root_limits())
+        .unwrap();
+
+    let mut c0 = vec![Elem::ZERO; n];
+    let mut c1 = vec![Elem::ZERO; n];
+    code.encode_into(&[e(1), e(0)], &mut c0).unwrap();
+    code.encode_into(&[e(0), e(1)], &mut c1).unwrap();
+    let received = midpoint(&c0, &c1);
+
+    let mut codeword = vec![Elem::ZERO; n];
+    code.encode_into(&[e(11), e(29)], &mut codeword).unwrap();
+    let ((), allocs) = measured(|| code.encode_into(&[e(11), e(29)], &mut codeword).unwrap());
+    assert_eq!(allocs, 0, "warm extended encode allocated {allocs} times");
+
+    let mut scratch = ExtendedGrsScratch::<Gf16>::new();
+    decoder.prepare_scratch(&mut scratch).unwrap();
+    let mut output: Vec<Polynomial<Gf16>> = Vec::new();
+    let candidates = decoder
+        .list_decode_into(&received, &mut scratch, &mut output)
+        .unwrap();
+    assert!(
+        candidates >= 2,
+        "expected a multi-candidate list, got {candidates}"
+    );
+    let _ = decoder.unique_decode(&received, &mut scratch).unwrap();
+
+    let (count, allocs) = measured(|| {
+        decoder
+            .list_decode_into(&received, &mut scratch, &mut output)
+            .unwrap()
+    });
+    assert_eq!(count, candidates);
+    assert_eq!(
+        allocs, 0,
+        "warm extended list_decode_into allocated {allocs} times"
+    );
+}
+
+fn mobius_steady_state() {
+    let points: Vec<Elem> = (0..16u8).map(e).collect();
+    let domain = EvaluationDomain::<Gf16>::arbitrary(points).unwrap();
+    // Affine map (c = 0) — no pole, no domain exclusion.
+    let map = MobiusMap::new(e(2), e(1), e(0), e(1));
+    let code = MobiusGrsCode::new(domain, ramp_multipliers(N), 2, map).unwrap();
+    let n = code.length();
+    let decoder = code
+        .list_decoder(TAU, parameter_limits(), root_limits())
+        .unwrap();
+
+    let mut c0 = vec![Elem::ZERO; n];
+    let mut c1 = vec![Elem::ZERO; n];
+    code.encode_into(&[e(1), e(0)], &mut c0).unwrap();
+    code.encode_into(&[e(0), e(1)], &mut c1).unwrap();
+    let received = midpoint(&c0, &c1);
+
+    let mut codeword = vec![Elem::ZERO; n];
+    code.encode_into(&[e(5), e(9)], &mut codeword).unwrap();
+    let ((), allocs) = measured(|| code.encode_into(&[e(5), e(9)], &mut codeword).unwrap());
+    assert_eq!(allocs, 0, "warm Möbius encode allocated {allocs} times");
+
+    let mut scratch = MobiusGrsScratch::<Gf16>::new();
+    decoder.prepare_scratch(&mut scratch).unwrap();
+    let mut output: Vec<Polynomial<Gf16>> = Vec::new();
+    let candidates = decoder
+        .list_decode_into(&received, &mut scratch, &mut output)
+        .unwrap();
+    assert!(
+        candidates >= 2,
+        "expected a multi-candidate list, got {candidates}"
+    );
+    let _ = decoder.unique_decode(&received, &mut scratch).unwrap();
+
+    let (count, allocs) = measured(|| {
+        decoder
+            .list_decode_into(&received, &mut scratch, &mut output)
+            .unwrap()
+    });
+    assert_eq!(count, candidates);
+    assert_eq!(
+        allocs, 0,
+        "warm Möbius list_decode_into allocated {allocs} times"
     );
 }

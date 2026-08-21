@@ -2,7 +2,7 @@
 
 use core::fmt;
 
-use gs_engine::{ConfigError, DecodeError};
+use gs_engine::{ConfigError, DecodeError, DomainError};
 
 /// Failure while building, encoding, or decoding a deformed GRS code.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,10 +103,45 @@ pub enum Error {
         /// Number of row messages supplied.
         got: usize,
     },
+    /// A puncture set left fewer than `k` surviving coordinates.
+    PunctureLength {
+        /// Surviving coordinate count `n - |S|`.
+        remaining: usize,
+        /// Dimension `k`.
+        dimension: usize,
+    },
+    /// A puncture index was outside `0..n`.
+    PunctureIndex {
+        /// Offending index.
+        index: usize,
+        /// Base code length `n`.
+        length: usize,
+    },
+    /// A puncture set listed the same coordinate twice.
+    DuplicatePuncture {
+        /// Repeated index.
+        index: usize,
+    },
+    /// The Möbius map was singular (`Δ = ad - bc = 0`).
+    MobiusDelta,
+    /// The Möbius pole `-d/c` coincided with a domain evaluation point.
+    MobiusPole {
+        /// Index of the domain point hit by the pole.
+        index: usize,
+    },
+    /// An extension functional did not have exactly `k` coefficients.
+    FunctionalLength {
+        /// Expected dimension `k`.
+        expected: usize,
+        /// Supplied functional length.
+        got: usize,
+    },
     /// The ambient Guruswami–Sudan configuration was infeasible.
     Configuration(ConfigError),
     /// The ambient Guruswami–Sudan decode failed.
     Decoding(DecodeError),
+    /// Evaluation-domain construction failed (e.g. repeated points).
+    Domain(DomainError),
 }
 
 impl From<ConfigError> for Error {
@@ -118,6 +153,12 @@ impl From<ConfigError> for Error {
 impl From<DecodeError> for Error {
     fn from(error: DecodeError) -> Self {
         Self::Decoding(error)
+    }
+}
+
+impl From<DomainError> for Error {
+    fn from(error: DomainError) -> Self {
+        Self::Domain(error)
     }
 }
 
@@ -185,8 +226,30 @@ impl fmt::Display for Error {
                 formatter,
                 "row-message count {got} does not match interleaving order {expected}"
             ),
+            Self::PunctureLength {
+                remaining,
+                dimension,
+            } => write!(
+                formatter,
+                "puncture leaves {remaining} coordinates, below dimension {dimension}"
+            ),
+            Self::PunctureIndex { index, length } => {
+                write!(formatter, "puncture index {index} is outside 0..{length}")
+            }
+            Self::DuplicatePuncture { index } => {
+                write!(formatter, "puncture set repeats coordinate {index}")
+            }
+            Self::MobiusDelta => write!(formatter, "Möbius map is singular (Δ = 0)"),
+            Self::MobiusPole { index } => {
+                write!(formatter, "Möbius pole coincides with domain point {index}")
+            }
+            Self::FunctionalLength { expected, got } => write!(
+                formatter,
+                "extension functional length {got} does not match dimension {expected}"
+            ),
             Self::Configuration(error) => write!(formatter, "ambient GS configuration: {error}"),
             Self::Decoding(error) => write!(formatter, "ambient GS decode: {error}"),
+            Self::Domain(error) => write!(formatter, "evaluation domain: {error}"),
         }
     }
 }

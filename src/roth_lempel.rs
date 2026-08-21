@@ -4,12 +4,10 @@ use alloc::vec::Vec;
 
 use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::Elem;
-use gs_engine::{
-    AlekhnovichLimits, DecodeScratch, EvaluationDomain, GsParameters, GsPlan, ParameterLimits,
-    Polynomial,
-};
+use gs_engine::{AlekhnovichLimits, EvaluationDomain, ParameterLimits, Polynomial};
 
 use crate::error::Error;
+use crate::extend::{ExtendedGrsCode, ExtendedGrsDecoder, ExtendedGrsScratch};
 use crate::outcome::UniqueDecode;
 
 /// A Roth–Lempel code `C_RL(α, v, k, δ)`.
@@ -26,11 +24,13 @@ use crate::outcome::UniqueDecode;
 /// coordinate including the exceptional last. The message space is the full
 /// `F_q[x]_{<k}`, so unlike twisted GRS there is no coefficient filter — only a
 /// re-encoded Hamming-distance check.
+///
+/// This is the single-functional extended GRS code with the exceptional
+/// functional `λ = e_{k-2} + δ · e_{k-1}`; it is a thin view over
+/// [`ExtendedGrsCode`].
 #[derive(Debug)]
 pub struct RothLempelCode<F: ButterflyKernels> {
-    domain: EvaluationDomain<F>,
-    multipliers: Vec<F::Elem>,
-    dimension: usize,
+    inner: ExtendedGrsCode<F>,
     twist: F::Elem,
 }
 
@@ -68,24 +68,24 @@ impl<F: ButterflyKernels> RothLempelCode<F> {
                 return Err(Error::ZeroMultiplier { index });
             }
         }
-        Ok(Self {
-            domain,
-            multipliers,
-            dimension,
-            twist,
-        })
+
+        let mut functional = alloc::vec![F::Elem::ZERO; dimension];
+        functional[dimension - 2] = F::Elem::ONE;
+        functional[dimension - 1] = twist;
+        let inner = ExtendedGrsCode::new(domain, multipliers, dimension, alloc::vec![functional])?;
+        Ok(Self { inner, twist })
     }
 
     /// Code length `n`.
     #[must_use]
     pub fn length(&self) -> usize {
-        self.domain.len() + 1
+        self.inner.length()
     }
 
     /// Message dimension `k`.
     #[must_use]
     pub const fn dimension(&self) -> usize {
-        self.dimension
+        self.inner.dimension()
     }
 
     /// The twist `δ`.
@@ -97,45 +97,18 @@ impl<F: ButterflyKernels> RothLempelCode<F> {
     /// The `n-1` evaluation points `α`.
     #[must_use]
     pub const fn domain(&self) -> &EvaluationDomain<F> {
-        &self.domain
+        self.inner.domain()
     }
 
     /// The column multipliers `v`.
     #[must_use]
     pub fn multipliers(&self) -> &[F::Elem] {
-        &self.multipliers
+        self.inner.multipliers()
     }
 
     /// Encode a `k`-symbol message into an `n`-symbol codeword.
     pub fn encode_into(&self, message: &[F::Elem], codeword: &mut [F::Elem]) -> Result<(), Error> {
-        let dimension = self.dimension;
-        let length = self.length();
-        let punctured = self.domain.len();
-        if message.len() != dimension {
-            return Err(Error::MessageLength {
-                expected: dimension,
-                got: message.len(),
-            });
-        }
-        if codeword.len() != length {
-            return Err(Error::CodewordLength {
-                expected: length,
-                got: codeword.len(),
-            });
-        }
-
-        let polynomial = Polynomial::<F>::from_coefficients(message)?;
-        let values = polynomial.evaluate_many(self.domain.points())?;
-        for (slot, (value, multiplier)) in codeword[..punctured]
-            .iter_mut()
-            .zip(values.iter().zip(self.multipliers.iter()))
-        {
-            *slot = multiplier.mul(*value);
-        }
-
-        let exceptional = message[dimension - 2].add(self.twist.mul(message[dimension - 1]));
-        codeword[punctured] = self.multipliers[punctured].mul(exceptional);
-        Ok(())
+        self.inner.encode_into(message, codeword)
     }
 
     /// Build a list decoder for a chosen decoding radius.
@@ -149,7 +122,10 @@ impl<F: ButterflyKernels> RothLempelCode<F> {
         parameter_limits: ParameterLimits,
         root_limits: AlekhnovichLimits,
     ) -> Result<RothLempelDecoder<F>, Error> {
-        RothLempelDecoder::new(self, target_radius, parameter_limits, root_limits)
+        let inner = self
+            .inner
+            .list_decoder(target_radius, parameter_limits, root_limits)?;
+        Ok(RothLempelDecoder { inner })
     }
 
     /// Build a decoder at the MDS unique-decoding radius `⌊(n-k)/2⌋`.
@@ -158,102 +134,46 @@ impl<F: ButterflyKernels> RothLempelCode<F> {
         parameter_limits: ParameterLimits,
         root_limits: AlekhnovichLimits,
     ) -> Result<RothLempelDecoder<F>, Error> {
-        let radius = (self.length() - self.dimension) / 2;
+        let radius = (self.length() - self.dimension()) / 2;
         self.list_decoder(radius, parameter_limits, root_limits)
     }
 }
 
 /// Reusable working storage for repeated Roth–Lempel decodes.
-pub struct RothLempelScratch<F: ButterflyKernels> {
-    decode: DecodeScratch<F>,
-    normalized: Vec<F::Elem>,
-    candidates: Vec<Polynomial<F>>,
-    distances: Vec<usize>,
-    filtered: Vec<Polynomial<F>>,
-}
-
-impl<F: ButterflyKernels> RothLempelScratch<F> {
-    /// Construct empty scratch storage.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            decode: DecodeScratch::new(),
-            normalized: Vec::new(),
-            candidates: Vec::new(),
-            distances: Vec::new(),
-            filtered: Vec::new(),
-        }
-    }
-}
-
-impl<F: ButterflyKernels> Default for RothLempelScratch<F> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+///
+/// This is exactly the extended-GRS scratch; Roth–Lempel is the
+/// single-functional extended code.
+pub type RothLempelScratch<F> = ExtendedGrsScratch<F>;
 
 /// A validated Roth–Lempel decoder bound to one decoding radius.
 ///
-/// Holds the punctured GRS [`GsPlan`], the inverse multipliers for the `n-1`
-/// punctured coordinates, and the exceptional-coordinate data needed to combine
-/// the punctured distance with the one-symbol exceptional check.
+/// A thin view over [`ExtendedGrsDecoder`]: it wraps the punctured GRS
+/// [`GsPlan`], the inverse multipliers for the `n-1` punctured coordinates, and
+/// the exceptional-coordinate data needed to combine the punctured distance
+/// with the one-symbol exceptional check.
+///
+/// [`GsPlan`]: gs_engine::GsPlan
 pub struct RothLempelDecoder<F: ButterflyKernels> {
-    plan: GsPlan<F>,
-    exceptional_multiplier: F::Elem,
-    inverse_multipliers: Vec<F::Elem>,
-    dimension: usize,
-    twist: F::Elem,
-    length: usize,
-    target_radius: usize,
+    inner: ExtendedGrsDecoder<F>,
 }
 
 impl<F: ButterflyKernels> RothLempelDecoder<F> {
-    pub(crate) fn new(
-        code: &RothLempelCode<F>,
-        target_radius: usize,
-        parameter_limits: ParameterLimits,
-        root_limits: AlekhnovichLimits,
-    ) -> Result<Self, Error> {
-        let punctured = code.domain.len();
-        let parameters = GsParameters::search::<F>(
-            punctured,
-            code.dimension - 1,
-            target_radius,
-            parameter_limits,
-        )?;
-        let plan = GsPlan::new(parameters, code.domain.clone(), root_limits)?;
-        let inverse_multipliers = code.multipliers[..punctured]
-            .iter()
-            .map(|m| m.inv())
-            .collect();
-
-        Ok(Self {
-            plan,
-            exceptional_multiplier: code.multipliers[punctured],
-            inverse_multipliers,
-            dimension: code.dimension,
-            twist: code.twist,
-            length: code.length(),
-            target_radius,
-        })
-    }
-
     /// The decoding radius this decoder was built for.
     #[must_use]
     pub const fn target_radius(&self) -> usize {
-        self.target_radius
+        self.inner.target_radius()
     }
 
     /// Message dimension `k`.
     #[must_use]
     pub const fn dimension(&self) -> usize {
-        self.dimension
+        self.inner.dimension()
     }
 
     /// Code length `n`.
     #[must_use]
     pub const fn length(&self) -> usize {
-        self.length
+        self.inner.length()
     }
 
     /// Reserve every reusable buffer for this decoder's maximum geometry.
@@ -264,13 +184,7 @@ impl<F: ButterflyKernels> RothLempelDecoder<F> {
     ///
     /// [`list_decode_into`]: Self::list_decode_into
     pub fn prepare_scratch(&self, scratch: &mut RothLempelScratch<F>) -> Result<(), Error> {
-        self.plan
-            .prepare_scratch(&mut scratch.decode, &mut scratch.candidates)?;
-        self.plan
-            .prepare_scratch(&mut scratch.decode, &mut scratch.filtered)?;
-        scratch.normalized.reserve(self.length - 1);
-        scratch.distances.reserve(self.plan.parameters().y_degree());
-        Ok(())
+        self.inner.prepare_scratch(scratch)
     }
 
     /// List decode a received word into caller-owned output.
@@ -288,46 +202,7 @@ impl<F: ButterflyKernels> RothLempelDecoder<F> {
         scratch: &mut RothLempelScratch<F>,
         output: &mut Vec<Polynomial<F>>,
     ) -> Result<usize, Error> {
-        if received.len() != self.length {
-            return Err(Error::ReceivedLength {
-                expected: self.length,
-                got: received.len(),
-            });
-        }
-        let punctured = self.length - 1;
-
-        scratch.normalized.clear();
-        scratch.normalized.reserve(punctured);
-        for (symbol, inverse) in received[..punctured]
-            .iter()
-            .zip(self.inverse_multipliers.iter())
-        {
-            scratch.normalized.push(symbol.mul(*inverse));
-        }
-
-        self.plan.decode_scored_into(
-            &scratch.normalized,
-            &mut scratch.decode,
-            &mut scratch.candidates,
-            &mut scratch.distances,
-        )?;
-
-        let mut count = 0;
-        for (candidate, &punctured_distance) in
-            scratch.candidates.iter().zip(scratch.distances.iter())
-        {
-            let exceptional = candidate
-                .coefficient(self.dimension - 2)
-                .add(self.twist.mul(candidate.coefficient(self.dimension - 1)));
-            let mismatch =
-                usize::from(self.exceptional_multiplier.mul(exceptional) != received[punctured]);
-            if punctured_distance + mismatch <= self.target_radius {
-                write_candidate(output, count, candidate);
-                count += 1;
-            }
-        }
-        output.truncate(count);
-        Ok(count)
+        self.inner.list_decode_into(received, scratch, output)
     }
 
     /// Uniquely decode a received word.
@@ -341,27 +216,6 @@ impl<F: ButterflyKernels> RothLempelDecoder<F> {
         received: &[F::Elem],
         scratch: &mut RothLempelScratch<F>,
     ) -> Result<UniqueDecode<F>, Error> {
-        let mut filtered = core::mem::take(&mut scratch.filtered);
-        let count = self.list_decode_into(received, scratch, &mut filtered)?;
-        let outcome = match count {
-            0 => UniqueDecode::NoCandidate,
-            1 => UniqueDecode::Message(filtered[0].clone()),
-            _ => UniqueDecode::Ambiguous,
-        };
-        scratch.filtered = filtered;
-        Ok(outcome)
-    }
-}
-
-/// Write `candidate` into `output[index]`, reusing retained storage.
-fn write_candidate<F: ButterflyKernels>(
-    output: &mut Vec<Polynomial<F>>,
-    index: usize,
-    candidate: &Polynomial<F>,
-) {
-    if index < output.len() {
-        output[index].clone_from(candidate);
-    } else {
-        output.push(candidate.clone());
+        self.inner.unique_decode(received, scratch)
     }
 }

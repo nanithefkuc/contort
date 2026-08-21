@@ -41,3 +41,19 @@ and releases follow [Semantic Versioning](https://semver.org/).
   (`InterleavedRsCode`): column-major encoding of `ℓ` independent rows over a
   shared domain and the column-Hamming metric. Construction only; the
   collaborative decoder is a future upstream capability.
+- Added the punctured GRS family (`PuncturedGrsCode`): deleting a coordinate set
+  `S` yields the GRS code on the surviving points, decoded by one Guruswami–Sudan
+  plan on the subdomain with no filter. Carries the block-alignment capability
+  flag for composed folds.
+- Added the Möbius-transformed GRS family (`MobiusGrsCode`): a projective-linear
+  relabelling `φ(x) = (a·x + b)/(c·x + d)` of the evaluation points, decoded by
+  either the moved-point plan on `β = φ(α)` or the normalized-multiplier plan on
+  `α` followed by the inverse-map pullback — the two routes return identical
+  lists. Singular maps and a pole on the domain are rejected; the map exposes the
+  orbit-preservation flag.
+- Generalized Roth–Lempel to the extended GRS family (`ExtendedGrsCode`):
+  appending coordinates given by arbitrary linear functionals on the message
+  coefficients, including the projective evaluation-at-infinity coordinate.
+  `RothLempelCode` is now the single-functional `f_{k-2} + δ·f_{k-1}` instance of
+  this engine, decoded by the shared puncture / Guruswami–Sudan / re-encode
+  reduction with no duplicated scorer.
