@@ -18,8 +18,8 @@ use crate::outcome::UniqueDecode;
 /// as an ordinary GRS code over `α = (α_1, …, α_{n-1})`; the exceptional last
 /// coordinate is `v_n · (f_{k-2} + δ · f_{k-1})`. Puncturing the last coordinate
 /// yields the GRS code `C_GRS(α, v', k)` (Lemma 7, Zhu–Jin), so decoding runs
-/// Guruswami–Sudan on that punctured code, re-encodes each candidate to a full
-/// Roth–Lempel codeword, and keeps those within the decoding radius.
+/// Guruswami–Sudan on that punctured code and combines each candidate's
+/// punctured distance with the one-symbol exceptional check.
 ///
 /// `domain` holds the `n-1` evaluation points; the code length is
 /// `n = domain.len() + 1`. `multipliers` has `n` entries, one per codeword
@@ -107,11 +107,7 @@ impl<F: ButterflyKernels> RothLempelCode<F> {
     }
 
     /// Encode a `k`-symbol message into an `n`-symbol codeword.
-    pub fn encode_into(
-        &self,
-        message: &[F::Elem],
-        codeword: &mut [F::Elem],
-    ) -> Result<(), Error> {
+    pub fn encode_into(&self, message: &[F::Elem], codeword: &mut [F::Elem]) -> Result<(), Error> {
         let dimension = self.dimension;
         let length = self.length();
         let punctured = self.domain.len();
@@ -172,6 +168,8 @@ pub struct RothLempelScratch<F: ButterflyKernels> {
     decode: DecodeScratch<F>,
     normalized: Vec<F::Elem>,
     candidates: Vec<Polynomial<F>>,
+    distances: Vec<usize>,
+    filtered: Vec<Polynomial<F>>,
 }
 
 impl<F: ButterflyKernels> RothLempelScratch<F> {
@@ -182,6 +180,8 @@ impl<F: ButterflyKernels> RothLempelScratch<F> {
             decode: DecodeScratch::new(),
             normalized: Vec::new(),
             candidates: Vec::new(),
+            distances: Vec::new(),
+            filtered: Vec::new(),
         }
     }
 }
@@ -195,11 +195,11 @@ impl<F: ButterflyKernels> Default for RothLempelScratch<F> {
 /// A validated Roth–Lempel decoder bound to one decoding radius.
 ///
 /// Holds the punctured GRS [`GsPlan`], the inverse multipliers for the `n-1`
-/// punctured coordinates, and everything needed to re-encode a candidate to a
-/// full `n`-symbol Roth–Lempel codeword for the distance check.
+/// punctured coordinates, and the exceptional-coordinate data needed to combine
+/// the punctured distance with the one-symbol exceptional check.
 pub struct RothLempelDecoder<F: ButterflyKernels> {
     plan: GsPlan<F>,
-    multipliers: Vec<F::Elem>,
+    exceptional_multiplier: F::Elem,
     inverse_multipliers: Vec<F::Elem>,
     dimension: usize,
     twist: F::Elem,
@@ -222,11 +222,14 @@ impl<F: ButterflyKernels> RothLempelDecoder<F> {
             parameter_limits,
         )?;
         let plan = GsPlan::new(parameters, code.domain.clone(), root_limits)?;
-        let inverse_multipliers = code.multipliers[..punctured].iter().map(|m| m.inv()).collect();
+        let inverse_multipliers = code.multipliers[..punctured]
+            .iter()
+            .map(|m| m.inv())
+            .collect();
 
         Ok(Self {
             plan,
-            multipliers: code.multipliers.clone(),
+            exceptional_multiplier: code.multipliers[punctured],
             inverse_multipliers,
             dimension: code.dimension,
             twist: code.twist,
@@ -253,19 +256,38 @@ impl<F: ButterflyKernels> RothLempelDecoder<F> {
         self.length
     }
 
+    /// Reserve every reusable buffer for this decoder's maximum geometry.
+    ///
+    /// After this call a warmed decode over `scratch` performs no internal heap
+    /// allocation. The caller-owned `output` of [`list_decode_into`] is warmed
+    /// by a single worst-case decode.
+    ///
+    /// [`list_decode_into`]: Self::list_decode_into
+    pub fn prepare_scratch(&self, scratch: &mut RothLempelScratch<F>) -> Result<(), Error> {
+        self.plan
+            .prepare_scratch(&mut scratch.decode, &mut scratch.candidates)?;
+        self.plan
+            .prepare_scratch(&mut scratch.decode, &mut scratch.filtered)?;
+        scratch.normalized.reserve(self.length - 1);
+        scratch.distances.reserve(self.plan.parameters().y_degree());
+        Ok(())
+    }
+
     /// List decode a received word into caller-owned output.
     ///
-    /// `output` is cleared and filled with the message polynomials (degree
-    /// `< k`) of every Roth–Lempel codeword within the decoding radius, in the
-    /// punctured decoder's deterministic order. Returns the number of
-    /// candidates.
+    /// Runs the scored Guruswami–Sudan decode on the punctured `[n-1, k]` GRS
+    /// code, which returns each candidate together with its exact punctured
+    /// Hamming distance. The full Roth–Lempel distance is that punctured
+    /// distance plus the one-symbol exceptional mismatch, so no candidate is
+    /// ever re-evaluated. `output` retains and overwrites its storage, then is
+    /// truncated to the candidate count, so a warmed decode does not reallocate
+    /// it. Returns the number of candidates.
     pub fn list_decode_into(
         &self,
         received: &[F::Elem],
         scratch: &mut RothLempelScratch<F>,
         output: &mut Vec<Polynomial<F>>,
     ) -> Result<usize, Error> {
-        output.clear();
         if received.len() != self.length {
             return Err(Error::ReceivedLength {
                 expected: self.length,
@@ -276,65 +298,70 @@ impl<F: ButterflyKernels> RothLempelDecoder<F> {
 
         scratch.normalized.clear();
         scratch.normalized.reserve(punctured);
-        for (symbol, inverse) in received[..punctured].iter().zip(self.inverse_multipliers.iter()) {
+        for (symbol, inverse) in received[..punctured]
+            .iter()
+            .zip(self.inverse_multipliers.iter())
+        {
             scratch.normalized.push(symbol.mul(*inverse));
         }
 
-        self.plan
-            .decode_into(&scratch.normalized, &mut scratch.decode, &mut scratch.candidates)?;
+        self.plan.decode_scored_into(
+            &scratch.normalized,
+            &mut scratch.decode,
+            &mut scratch.candidates,
+            &mut scratch.distances,
+        )?;
 
-        for candidate in &scratch.candidates {
-            if self.full_distance(candidate, received)? <= self.target_radius {
-                output.push(candidate.clone());
+        let mut count = 0;
+        for (candidate, &punctured_distance) in
+            scratch.candidates.iter().zip(scratch.distances.iter())
+        {
+            let exceptional = candidate
+                .coefficient(self.dimension - 2)
+                .add(self.twist.mul(candidate.coefficient(self.dimension - 1)));
+            let mismatch =
+                usize::from(self.exceptional_multiplier.mul(exceptional) != received[punctured]);
+            if punctured_distance + mismatch <= self.target_radius {
+                write_candidate(output, count, candidate);
+                count += 1;
             }
         }
-        Ok(output.len())
+        output.truncate(count);
+        Ok(count)
     }
 
     /// Uniquely decode a received word.
     ///
     /// Returns [`UniqueDecode::Message`] when exactly one codeword lies within
     /// the decoding radius, and [`UniqueDecode::NoCandidate`] or
-    /// [`UniqueDecode::Ambiguous`] otherwise.
+    /// [`UniqueDecode::Ambiguous`] otherwise. Filtering reuses scratch-owned
+    /// storage; `Ambiguous` and `NoCandidate` allocate nothing once warmed.
     pub fn unique_decode(
         &self,
         received: &[F::Elem],
         scratch: &mut RothLempelScratch<F>,
     ) -> Result<UniqueDecode<F>, Error> {
-        let mut output = Vec::new();
-        let count = self.list_decode_into(received, scratch, &mut output)?;
-        Ok(match count {
+        let mut filtered = core::mem::take(&mut scratch.filtered);
+        let count = self.list_decode_into(received, scratch, &mut filtered)?;
+        let outcome = match count {
             0 => UniqueDecode::NoCandidate,
-            1 => UniqueDecode::Message(output.pop().unwrap_or_else(Polynomial::zero)),
+            1 => UniqueDecode::Message(filtered[0].clone()),
             _ => UniqueDecode::Ambiguous,
-        })
+        };
+        scratch.filtered = filtered;
+        Ok(outcome)
     }
+}
 
-    /// Full Hamming distance between the received word and the Roth–Lempel
-    /// codeword of `candidate`, including the exceptional last coordinate.
-    fn full_distance(
-        &self,
-        candidate: &Polynomial<F>,
-        received: &[F::Elem],
-    ) -> Result<usize, Error> {
-        let punctured = self.length - 1;
-        let values = candidate.evaluate_many(self.plan.domain().points())?;
-        let mut distance = 0;
-        for ((value, multiplier), symbol) in values
-            .iter()
-            .zip(self.multipliers.iter())
-            .zip(received[..punctured].iter())
-        {
-            if multiplier.mul(*value) != *symbol {
-                distance += 1;
-            }
-        }
-        let exceptional = candidate
-            .coefficient(self.dimension - 2)
-            .add(self.twist.mul(candidate.coefficient(self.dimension - 1)));
-        if self.multipliers[punctured].mul(exceptional) != received[punctured] {
-            distance += 1;
-        }
-        Ok(distance)
+/// Write `candidate` into `output[index]`, reusing retained storage.
+fn write_candidate<F: ButterflyKernels>(
+    output: &mut Vec<Polynomial<F>>,
+    index: usize,
+    candidate: &Polynomial<F>,
+) {
+    if index < output.len() {
+        output[index].clone_from(candidate);
+    } else {
+        output.push(candidate.clone());
     }
 }

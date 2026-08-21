@@ -81,6 +81,28 @@ pub enum Error {
         /// Supplied received length.
         got: usize,
     },
+    /// The generator does not produce `length` distinct powers, so it cannot
+    /// index a multiplicative orbit of that length.
+    InsufficientOrbit {
+        /// Number of distinct orbit points required.
+        length: usize,
+    },
+    /// The fold `m` was zero or did not divide the code length `n`.
+    FoldParameter {
+        /// The offending fold value.
+        fold: usize,
+        /// The code length it must divide.
+        length: usize,
+    },
+    /// The interleaving order `ℓ` was zero.
+    ZeroInterleave,
+    /// A batch of row messages did not have exactly `ℓ` entries.
+    MessageCount {
+        /// Interleaving order `ℓ`.
+        expected: usize,
+        /// Number of row messages supplied.
+        got: usize,
+    },
     /// The ambient Guruswami–Sudan configuration was infeasible.
     Configuration(ConfigError),
     /// The ambient Guruswami–Sudan decode failed.
@@ -121,7 +143,10 @@ impl fmt::Display for Error {
                 write!(formatter, "twist offset {offset} is outside 1..={max}")
             }
             Self::TwistHook { hook, dimension } => {
-                write!(formatter, "twist hook {hook} is not below dimension {dimension}")
+                write!(
+                    formatter,
+                    "twist hook {hook} is not below dimension {dimension}"
+                )
             }
             Self::ZeroTwistCoefficient { index } => {
                 write!(formatter, "twist coefficient at index {index} is zero")
@@ -130,14 +155,36 @@ impl fmt::Display for Error {
                 write!(formatter, "twists share the pair (t={offset}, h={hook})")
             }
             Self::MessageLength { expected, got } => {
-                write!(formatter, "message length {got} does not match dimension {expected}")
+                write!(
+                    formatter,
+                    "message length {got} does not match dimension {expected}"
+                )
             }
             Self::CodewordLength { expected, got } => {
-                write!(formatter, "codeword length {got} does not match code length {expected}")
+                write!(
+                    formatter,
+                    "codeword length {got} does not match code length {expected}"
+                )
             }
             Self::ReceivedLength { expected, got } => {
-                write!(formatter, "received length {got} does not match code length {expected}")
+                write!(
+                    formatter,
+                    "received length {got} does not match code length {expected}"
+                )
             }
+            Self::InsufficientOrbit { length } => write!(
+                formatter,
+                "generator does not produce {length} distinct orbit powers"
+            ),
+            Self::FoldParameter { fold, length } => write!(
+                formatter,
+                "fold {fold} must be nonzero and divide code length {length}"
+            ),
+            Self::ZeroInterleave => write!(formatter, "interleaving order must be nonzero"),
+            Self::MessageCount { expected, got } => write!(
+                formatter,
+                "row-message count {got} does not match interleaving order {expected}"
+            ),
             Self::Configuration(error) => write!(formatter, "ambient GS configuration: {error}"),
             Self::Decoding(error) => write!(formatter, "ambient GS decode: {error}"),
         }

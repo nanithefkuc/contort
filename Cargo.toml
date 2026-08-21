@@ -16,6 +16,18 @@ simd = ["std", "gs-engine/simd", "fgf/simd", "butterfly-fft/simd"]
 internals = []
 
 [dependencies]
-gs-engine = { git = "https://github.com/nanithefkuc/gs-engine", rev = "7cc629aadc1f6d12b489176bbd45ee3389510dd4", default-features = false }
+gs-engine = { git = "https://github.com/nanithefkuc/gs-engine", rev = "b845adf9dd1be5ae64a15829ce0c615302745172", default-features = false }
 fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "d0e331cec2e6ae5645e529597fa913db467a44cd", default-features = false }
 butterfly-fft = { git = "https://github.com/nanithefkuc/butterfly-fft", rev = "6b3f52485bfff2664d6b0c92452137e618a60932", default-features = false }
+
+[dev-dependencies]
+# Default features pull in plotters + rayon, which this harness does not use.
+criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "encoder"
+harness = false
+
+[[bench]]
+name = "decoder"
+harness = false

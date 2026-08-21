@@ -19,3 +19,17 @@ and releases follow [Semantic Versioning](https://semver.org/).
   and re-encoding candidates for a full Hamming-distance check (Zhu–Jin).
 - Promoted the per-family error to a shared `Error` and shared the
   `UniqueDecode` outcome across families.
+- Made warmed decoding allocation-free: both decoders gained a
+  `prepare_scratch` method, list decoding overwrites and truncates retained
+  output polynomials instead of clearing and re-pushing, and unique decoding
+  filters through scratch-owned storage. Proven by a counting-allocator
+  integration test (`tests/zero_alloc.rs`) over a multi-candidate word.
+- Replaced the twisted GRS decoder's nested per-degree twist tables with a
+  flat compressed-row constraint layout.
+- Roth–Lempel decoding no longer re-evaluates candidates: it consumes
+  `gs-engine`'s scored decode (`decode_scored_into`), reading each candidate's
+  exact punctured distance and adding only the one-symbol exceptional mismatch
+  to obtain the full distance.
+- Bumped the `gs-engine` pin to the revision exposing scored decode candidates.
+- Added a `criterion` benchmark harness (`benches/encoder.rs`,
+  `benches/decoder.rs`) and recorded steady-state baselines in `BENCHMARKS.md`.
