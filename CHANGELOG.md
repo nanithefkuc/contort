@@ -33,3 +33,11 @@ and releases follow [Semantic Versioning](https://semver.org/).
 - Bumped the `gs-engine` pin to the revision exposing scored decode candidates.
 - Added a `criterion` benchmark harness (`benches/encoder.rs`,
   `benches/decoder.rs`) and recorded steady-state baselines in `BENCHMARKS.md`.
+- Added the folded Reed–Solomon construction (`FoldedRsCode`): multiplicative
+  orbit geometry with order validation, an allocation-free block-major encoder,
+  and the block-Hamming metric. Construction only; the capacity list decoder is
+  a future upstream capability.
+- Added the homogeneous interleaved Reed–Solomon construction
+  (`InterleavedRsCode`): column-major encoding of `ℓ` independent rows over a
+  shared domain and the column-Hamming metric. Construction only; the
+  collaborative decoder is a future upstream capability.
