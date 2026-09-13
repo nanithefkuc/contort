@@ -214,7 +214,7 @@ checksum = "3e0f1c7c3a72c66fd80abe965175f7523475c0489a87d3ff9d6e8c87d87a9d2d"
 [[package]]
 name = "gfm"
 version = "0.0.0"
-source = "git+https://github.com/nanithefkuc/gfm?rev=b5878f5c110c90248ef64cdf248f35c9a70e3bef#b5878f5c110c90248ef64cdf248f35c9a70e3bef"
+source = "git+https://github.com/nanithefkuc/gfm?rev=a1cad8ad05799e968ceff69317fab205ed1176d0#a1cad8ad05799e968ceff69317fab205ed1176d0"
 dependencies = [
  "fgf",
  "poly-ring",
@@ -223,7 +223,7 @@ dependencies = [
 [[package]]
 name = "gs-engine"
 version = "0.1.0"
-source = "git+https://github.com/nanithefkuc/gs-engine?rev=bf07653b6278e9880428ac6c6af6fa6d7bd1c554#bf07653b6278e9880428ac6c6af6fa6d7bd1c554"
+source = "git+https://github.com/nanithefkuc/gs-engine?rev=2f51e8fb9fecef5b713c6b6f94b68faa5abf6bdd#2f51e8fb9fecef5b713c6b6f94b68faa5abf6bdd"
 dependencies = [
  "butterfly-fft",
  "fgf",
