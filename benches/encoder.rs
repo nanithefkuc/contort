@@ -8,19 +8,20 @@
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use contort::{EvaluationDomain, RothLempelCode, TgrsCode, Twist};
+use contort::{RothLempelCode, TgrsCode, Twist};
+use gs_engine::EvaluationDomain;
 
 fn bench_gf8(criterion: &mut Criterion) {
-    use fgf::Gf8;
-    use fgf::gf8::Elem;
-    let e = |v: u8| Elem(v);
+    use fgf::Gf8B;
+    use fgf::gf8b::Elem;
+    let e = |v: u8| Elem::from_raw(v);
     let n = 8usize;
     let k = 2usize;
 
     let points: Vec<Elem> = (0..n as u8).map(e).collect();
     let multipliers: Vec<Elem> = (0..n).map(|i| e((i + 1) as u8)).collect();
 
-    let tgrs = TgrsCode::<Gf8>::new(
+    let tgrs = TgrsCode::<Gf8B>::new(
         EvaluationDomain::arbitrary(points.clone()).unwrap(),
         multipliers.clone(),
         k,
@@ -28,7 +29,7 @@ fn bench_gf8(criterion: &mut Criterion) {
     )
     .unwrap();
     let rl_points: Vec<Elem> = (1..n as u8).map(e).collect();
-    let rl = RothLempelCode::<Gf8>::new(
+    let rl = RothLempelCode::<Gf8B>::new(
         EvaluationDomain::arbitrary(rl_points).unwrap(),
         multipliers,
         k,
@@ -56,7 +57,7 @@ fn bench_gf8(criterion: &mut Criterion) {
 fn bench_gf16(criterion: &mut Criterion) {
     use fgf::Gf16;
     use fgf::gf16::Elem;
-    let e = |v: u8| Elem(u16::from(v));
+    let e = |v: u8| Elem::from_raw(u16::from(v));
     let n = 16usize;
     let k = 2usize;
 

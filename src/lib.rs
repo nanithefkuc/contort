@@ -59,4 +59,4 @@ pub use puncture::{PuncturedGrsCode, PuncturedGrsDecoder, PuncturedGrsScratch};
 pub use roth_lempel::{RothLempelCode, RothLempelDecoder, RothLempelScratch};
 pub use twist::Twist;
 
-pub use gs_engine::{AlekhnovichLimits, EvaluationDomain, ParameterLimits, Polynomial};
+pub use poly_ring::{AlekhnovichLimits, Polynomial};

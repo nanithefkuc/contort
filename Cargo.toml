@@ -9,16 +9,19 @@ repository = "https://github.com/nanithefkuc/contort"
 
 [features]
 default = ["std", "simd"]
-std = ["gs-engine/std", "fgf/std", "butterfly-fft/std"]
-simd = ["std", "gs-engine/simd", "fgf/simd", "butterfly-fft/simd"]
+std = ["poly-ring/std", "gs-engine/std", "fgf/std", "butterfly-fft/std"]
+simd = ["std", "poly-ring/simd", "gs-engine/simd", "fgf/simd", "butterfly-fft/simd"]
 # Unstable implementation APIs for benchmarking and downstream
 # experimentation. Not covered by any compatibility promise.
 internals = []
 
 [dependencies]
-gs-engine = { git = "https://github.com/nanithefkuc/gs-engine", rev = "b845adf9dd1be5ae64a15829ce0c615302745172", default-features = false }
-fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "d0e331cec2e6ae5645e529597fa913db467a44cd", default-features = false }
-butterfly-fft = { git = "https://github.com/nanithefkuc/butterfly-fft", rev = "6b3f52485bfff2664d6b0c92452137e618a60932", default-features = false }
+gs-engine = { git = "https://github.com/nanithefkuc/gs-engine", rev = "bf07653b6278e9880428ac6c6af6fa6d7bd1c554", default-features = false }
+# The same landed field/transform/ring sources the engine resolves, so one
+# copy of each compiles across the closure.
+poly-ring = { git = "https://github.com/nanithefkuc/poly-ring", rev = "091164ee4e547c54012a3cab994813c3c825d70c", default-features = false, features = ["fft"] }
+fgf = { git = "https://github.com/nanithefkuc/fgf", rev = "b33b441bcff60da80354bfee6050db4aeab6295c", default-features = false }
+butterfly-fft = { git = "https://github.com/nanithefkuc/butterfly-fft", rev = "7a682acae356ee2ae99596a16b92ba9b8e5c0451", default-features = false }
 
 [dev-dependencies]
 # Default features pull in plotters + rayon, which this harness does not use.
@@ -31,3 +34,11 @@ harness = false
 [[bench]]
 name = "decoder"
 harness = false
+
+# Release codegen a profiler can attribute: opt-level 3 with full debug info
+# and no symbol stripping. Frame pointers come from RUSTFLAGS in `just
+# profile-perf`, since they are not a Cargo profile key.
+[profile.profiling]
+inherits = "release"
+debug = "full"
+strip = "none"

@@ -10,15 +10,14 @@
 //! decoder's list must equal that set, and the unique decoder must agree with
 //! the ball's cardinality.
 
-use contort::{
-    AlekhnovichLimits, Error, EvaluationDomain, ParameterLimits, Polynomial, PuncturedGrsCode,
-    PuncturedGrsDecoder, PuncturedGrsScratch, UniqueDecode,
-};
-use fgf::Gf8;
-use fgf::gf8::Elem;
+use contort::{Error, PuncturedGrsCode, PuncturedGrsDecoder, PuncturedGrsScratch, UniqueDecode};
+use fgf::Gf8B;
+use fgf::gf8b::Elem;
+use gs_engine::{EvaluationDomain, ParameterLimits};
+use poly_ring::{AlekhnovichLimits, Polynomial};
 
 fn e(byte: u8) -> Elem {
-    Elem(byte)
+    Elem::from_raw(byte)
 }
 
 fn parameter_limits() -> ParameterLimits {
@@ -35,9 +34,9 @@ fn ramp_multipliers(n: usize) -> Vec<Elem> {
 }
 
 /// An `n`-point arbitrary evaluation domain over distinct nonzero elements.
-fn base_domain(n: usize) -> EvaluationDomain<Gf8> {
+fn base_domain(n: usize) -> EvaluationDomain<Gf8B> {
     let points: Vec<Elem> = (1..=n as u8).map(e).collect();
-    EvaluationDomain::<Gf8>::arbitrary(points).unwrap()
+    EvaluationDomain::<Gf8B>::arbitrary(points).unwrap()
 }
 
 fn hamming(a: &[Elem], b: &[Elem]) -> usize {
@@ -46,7 +45,11 @@ fn hamming(a: &[Elem], b: &[Elem]) -> usize {
 
 /// Every message in `GF(2^8)^k` whose punctured codeword is within `tau` of
 /// `received`, as sorted message-coefficient vectors.
-fn brute_force_ball(code: &PuncturedGrsCode<Gf8>, received: &[Elem], tau: usize) -> Vec<Vec<Elem>> {
+fn brute_force_ball(
+    code: &PuncturedGrsCode<Gf8B>,
+    received: &[Elem],
+    tau: usize,
+) -> Vec<Vec<Elem>> {
     let k = code.dimension();
     let n = code.length();
     let mut ball = Vec::new();
@@ -82,7 +85,7 @@ fn brute_force_ball(code: &PuncturedGrsCode<Gf8>, received: &[Elem], tau: usize)
 }
 
 /// Decoded message polynomials as sorted coefficient vectors.
-fn decoded_messages(candidates: &[Polynomial<Gf8>], k: usize) -> Vec<Vec<Elem>> {
+fn decoded_messages(candidates: &[Polynomial<Gf8B>], k: usize) -> Vec<Vec<Elem>> {
     let mut messages: Vec<Vec<Elem>> = candidates
         .iter()
         .map(|poly| (0..k).map(|d| poly.coefficient(d)).collect())
@@ -94,8 +97,8 @@ fn decoded_messages(candidates: &[Polynomial<Gf8>], k: usize) -> Vec<Vec<Elem>> 
 /// Assert the decoder's list and unique output both agree with the oracle for
 /// one received word.
 fn check_against_oracle(
-    code: &PuncturedGrsCode<Gf8>,
-    decoder: &PuncturedGrsDecoder<Gf8>,
+    code: &PuncturedGrsCode<Gf8B>,
+    decoder: &PuncturedGrsDecoder<Gf8B>,
     received: &[Elem],
 ) {
     let mut scratch = PuncturedGrsScratch::new();
@@ -127,7 +130,7 @@ fn check_against_oracle(
 
 /// Codeword-derived words with 0..=`max_errors` errors, plus arbitrary words.
 fn probe_words(
-    code: &PuncturedGrsCode<Gf8>,
+    code: &PuncturedGrsCode<Gf8B>,
     message: &[Elem],
     max_errors: usize,
 ) -> Vec<Vec<Elem>> {
@@ -150,7 +153,7 @@ fn probe_words(
 }
 
 /// Surviving base indices of a code, in ascending order.
-fn surviving_indices(code: &PuncturedGrsCode<Gf8>) -> Vec<usize> {
+fn surviving_indices(code: &PuncturedGrsCode<Gf8B>) -> Vec<usize> {
     (0..code.base_length())
         .filter(|i| !code.punctures().contains(i))
         .collect()

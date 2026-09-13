@@ -16,16 +16,17 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use contort::{
-    AlekhnovichLimits, EvaluationDomain, ExtendedGrsCode, ExtendedGrsScratch, FoldedRsCode,
-    InterleavedRsCode, MobiusGrsCode, MobiusGrsScratch, MobiusMap, ParameterLimits, Polynomial,
-    PuncturedGrsCode, PuncturedGrsScratch, RothLempelCode, RothLempelScratch, TgrsCode,
-    TgrsScratch, Twist, UniqueDecode,
-};
 #[cfg(feature = "internals")]
 use contort::{BaseCode, ExtendCoord, TransformOp, TransformWord};
+use contort::{
+    ExtendedGrsCode, ExtendedGrsScratch, FoldedRsCode, InterleavedRsCode, MobiusGrsCode,
+    MobiusGrsScratch, MobiusMap, PuncturedGrsCode, PuncturedGrsScratch, RothLempelCode,
+    RothLempelScratch, TgrsCode, TgrsScratch, Twist, UniqueDecode,
+};
 use fgf::Gf16;
 use fgf::gf16::Elem;
+use gs_engine::{EvaluationDomain, ParameterLimits};
+use poly_ring::{AlekhnovichLimits, Polynomial};
 
 static ALLOCS: AtomicUsize = AtomicUsize::new(0);
 static COUNTING: AtomicBool = AtomicBool::new(false);
@@ -54,7 +55,7 @@ unsafe impl GlobalAlloc for Counting {
 static ALLOC: Counting = Counting;
 
 fn e(value: u8) -> Elem {
-    Elem(u16::from(value))
+    Elem::from_raw(u16::from(value))
 }
 
 fn parameter_limits() -> ParameterLimits {

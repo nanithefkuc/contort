@@ -48,6 +48,28 @@ Capacity-achieving folded / interleaved decoding needs multivariate
 interpolation and root finding that `gs-engine` does not yet expose; those are
 an upstream `gs-engine` addition, not a private decoder here.
 
+## Tooling
+
+`just validate` is the PR gate: lint, the dependency allowlist, docs, the
+feature matrix, the tier matrix, Miri, and coverage in one run, and the
+crate's CI workflow drives the same recipes. The shared recipe surface is
+documented once in the umbrella's root `AGENTS.md`; only contort's values
+are below.
+
+- `TIERS := 'v3 v2 scalar'`. No kernels live here — these are the backends
+  `fgf`'s field kernels and `butterfly-fft`'s transforms dispatch over
+  underneath `gs-engine`. `SIMD_BACKEND` resolves once per process, so
+  `just test-tiers` and `just cover` re-run the suite pinned to each tier.
+- `MIRI` is empty: `#![forbid(unsafe_code)]` leaves nothing to interpret, so
+  `just unsafe-check` reports the empty surface and skips.
+- Bench targets are `encoder` and `decoder`: `just bench decoder`,
+  `just perf-bench decoder 20`.
+- `COV_IGNORE` is deliberately empty, so `just cover` holds the whole crate
+  to 95% lines while folded and interleaved are unimplemented — close a gap
+  with a test, never with an exclusion.
+- `justfile` is a byte-identical vendored copy — never edit it here.
+  Crate-specific values and recipes belong in `crate.just`.
+
 ## Build & test
 
 ```sh

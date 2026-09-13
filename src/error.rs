@@ -136,6 +136,8 @@ pub enum Error {
         /// Supplied functional length.
         got: usize,
     },
+    /// Ring polynomial arithmetic failed.
+    Polynomial(poly_ring::PolynomialError),
     /// The ambient Guruswami–Sudan configuration was infeasible.
     Configuration(ConfigError),
     /// The ambient Guruswami–Sudan decode failed.
@@ -159,6 +161,18 @@ impl From<DecodeError> for Error {
 impl From<DomainError> for Error {
     fn from(error: DomainError) -> Self {
         Self::Domain(error)
+    }
+}
+
+impl From<poly_ring::PolynomialError> for Error {
+    fn from(error: poly_ring::PolynomialError) -> Self {
+        Self::Polynomial(error)
+    }
+}
+
+impl From<poly_ring::ConfigError> for Error {
+    fn from(error: poly_ring::ConfigError) -> Self {
+        Self::Polynomial(poly_ring::PolynomialError::Config(error))
     }
 }
 
@@ -247,6 +261,7 @@ impl fmt::Display for Error {
                 formatter,
                 "extension functional length {got} does not match dimension {expected}"
             ),
+            Self::Polynomial(error) => error.fmt(formatter),
             Self::Configuration(error) => write!(formatter, "ambient GS configuration: {error}"),
             Self::Decoding(error) => write!(formatter, "ambient GS decode: {error}"),
             Self::Domain(error) => write!(formatter, "evaluation domain: {error}"),

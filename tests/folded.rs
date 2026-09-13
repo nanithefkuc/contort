@@ -6,12 +6,13 @@
 //! scalar components inside it differ, and every geometry rejection is
 //! asserted by variant.
 
-use contort::{Error, FoldedRsCode, Polynomial};
-use fgf::Gf8;
-use fgf::gf8::Elem;
+use contort::{Error, FoldedRsCode};
+use fgf::Gf8B;
+use fgf::gf8b::Elem;
+use poly_ring::Polynomial;
 
 fn e(value: u8) -> Elem {
-    Elem(value)
+    Elem::from_raw(value)
 }
 
 fn ramp(n: usize) -> Vec<Elem> {
@@ -27,7 +28,7 @@ fn encoder_matches_evaluation_oracle() {
     let n = 6;
     let m = 2;
     let k = 2;
-    let code = FoldedRsCode::<Gf8>::new(e(GAMMA), ramp(n), k, m).unwrap();
+    let code = FoldedRsCode::<Gf8B>::new(e(GAMMA), ramp(n), k, m).unwrap();
     let orbit = code.orbit().to_vec();
 
     let mut codeword = vec![Elem::ZERO; n];
@@ -37,7 +38,7 @@ fn encoder_matches_evaluation_oracle() {
             code.encode_into(&message, &mut codeword).unwrap();
 
             // Independent oracle: v_i * f(γ^i).
-            let poly = Polynomial::<Gf8>::from_coefficients(&message).unwrap();
+            let poly = Polynomial::<Gf8B>::from_coefficients(&message).unwrap();
             let values = poly.evaluate_many(&orbit).unwrap();
             for i in 0..n {
                 let expected = code.multipliers()[i].mul(values[i]);
@@ -51,20 +52,20 @@ fn encoder_matches_evaluation_oracle() {
 fn block_distance_counts_a_block_once() {
     let n = 6;
     let m = 2;
-    let code = FoldedRsCode::<Gf8>::new(e(GAMMA), ramp(n), 2, m).unwrap();
+    let code = FoldedRsCode::<Gf8B>::new(e(GAMMA), ramp(n), 2, m).unwrap();
     let mut a = vec![Elem::ZERO; n];
     code.encode_into(&[e(3), e(9)], &mut a).unwrap();
 
     // Two scalar changes inside one block (indices 0,1) → one block error.
     let mut one_block = a.clone();
-    one_block[0] = Elem(one_block[0].0 ^ 1);
-    one_block[1] = Elem(one_block[1].0 ^ 1);
+    one_block[0] = Elem::from_raw(one_block[0].to_raw() ^ 1);
+    one_block[1] = Elem::from_raw(one_block[1].to_raw() ^ 1);
     assert_eq!(code.block_distance(&a, &one_block), 1);
 
     // One scalar change in each of two blocks (indices 0 and 2) → two errors.
     let mut two_blocks = a.clone();
-    two_blocks[0] = Elem(two_blocks[0].0 ^ 1);
-    two_blocks[2] = Elem(two_blocks[2].0 ^ 1);
+    two_blocks[0] = Elem::from_raw(two_blocks[0].to_raw() ^ 1);
+    two_blocks[2] = Elem::from_raw(two_blocks[2].to_raw() ^ 1);
     assert_eq!(code.block_distance(&a, &two_blocks), 2);
 
     // Blocks partition the word.
@@ -78,26 +79,26 @@ fn block_distance_counts_a_block_once() {
 fn construction_rejects_bad_geometry() {
     // Zero generator.
     assert!(matches!(
-        FoldedRsCode::<Gf8>::new(e(0), ramp(6), 2, 2),
+        FoldedRsCode::<Gf8B>::new(e(0), ramp(6), 2, 2),
         Err(Error::InsufficientOrbit { length: 6 })
     ));
     // Order-1 generator repeats γ^0 immediately, so it cannot index n > 1.
     assert!(matches!(
-        FoldedRsCode::<Gf8>::new(e(1), ramp(4), 2, 2),
+        FoldedRsCode::<Gf8B>::new(e(1), ramp(4), 2, 2),
         Err(Error::InsufficientOrbit { length: 4 })
     ));
     // Fold zero and fold not dividing n.
     assert!(matches!(
-        FoldedRsCode::<Gf8>::new(e(GAMMA), ramp(6), 2, 0),
+        FoldedRsCode::<Gf8B>::new(e(GAMMA), ramp(6), 2, 0),
         Err(Error::FoldParameter { fold: 0, length: 6 })
     ));
     assert!(matches!(
-        FoldedRsCode::<Gf8>::new(e(GAMMA), ramp(6), 2, 4),
+        FoldedRsCode::<Gf8B>::new(e(GAMMA), ramp(6), 2, 4),
         Err(Error::FoldParameter { fold: 4, length: 6 })
     ));
     // Bad dimension and zero multiplier.
     assert!(matches!(
-        FoldedRsCode::<Gf8>::new(e(GAMMA), ramp(6), 6, 2),
+        FoldedRsCode::<Gf8B>::new(e(GAMMA), ramp(6), 6, 2),
         Err(Error::InvalidDimension {
             dimension: 6,
             length: 6
@@ -106,14 +107,14 @@ fn construction_rejects_bad_geometry() {
     let mut bad = ramp(6);
     bad[3] = e(0);
     assert!(matches!(
-        FoldedRsCode::<Gf8>::new(e(GAMMA), bad, 2, 2),
+        FoldedRsCode::<Gf8B>::new(e(GAMMA), bad, 2, 2),
         Err(Error::ZeroMultiplier { index: 3 })
     ));
 }
 
 #[test]
 fn io_length_checks() {
-    let code = FoldedRsCode::<Gf8>::new(e(GAMMA), ramp(6), 2, 2).unwrap();
+    let code = FoldedRsCode::<Gf8B>::new(e(GAMMA), ramp(6), 2, 2).unwrap();
     let mut codeword = vec![Elem::ZERO; 6];
     assert!(matches!(
         code.encode_into(&[e(1)], &mut codeword),

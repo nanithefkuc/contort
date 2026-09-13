@@ -6,15 +6,15 @@
 //! radius. The decoder's list must equal that set exactly, and the unique
 //! decoder must agree with the ball's cardinality.
 
-use contort::{
-    AlekhnovichLimits, Error, EvaluationDomain, ParameterLimits, Polynomial, TgrsCode, TgrsScratch,
-    Twist, UniqueDecode,
-};
-use fgf::Gf8;
-use fgf::gf8::Elem;
+use poly_ring::{AlekhnovichLimits, Polynomial};
+
+use contort::{Error, TgrsCode, TgrsScratch, Twist, UniqueDecode};
+use fgf::Gf8B;
+use fgf::gf8b::Elem;
+use gs_engine::{EvaluationDomain, ParameterLimits};
 
 fn e(byte: u8) -> Elem {
-    Elem(byte)
+    Elem::from_raw(byte)
 }
 
 fn parameter_limits() -> ParameterLimits {
@@ -36,7 +36,7 @@ fn hamming(a: &[Elem], b: &[Elem]) -> usize {
 
 /// Every message in `GF(2^8)^k` whose codeword is within `tau` of `received`,
 /// as sorted message-coefficient vectors.
-fn brute_force_ball(code: &TgrsCode<Gf8>, received: &[Elem], tau: usize) -> Vec<Vec<Elem>> {
+fn brute_force_ball(code: &TgrsCode<Gf8B>, received: &[Elem], tau: usize) -> Vec<Vec<Elem>> {
     let k = code.dimension();
     let n = code.length();
     let mut ball = Vec::new();
@@ -73,7 +73,7 @@ fn brute_force_ball(code: &TgrsCode<Gf8>, received: &[Elem], tau: usize) -> Vec<
 }
 
 /// Decoded message polynomials as sorted coefficient vectors.
-fn decoded_messages(candidates: &[Polynomial<Gf8>], k: usize) -> Vec<Vec<Elem>> {
+fn decoded_messages(candidates: &[Polynomial<Gf8B>], k: usize) -> Vec<Vec<Elem>> {
     let mut messages: Vec<Vec<Elem>> = candidates
         .iter()
         .map(|poly| (0..k).map(|d| poly.coefficient(d)).collect())
@@ -85,8 +85,8 @@ fn decoded_messages(candidates: &[Polynomial<Gf8>], k: usize) -> Vec<Vec<Elem>> 
 /// Assert the decoder's list and unique output both agree with the oracle for
 /// one received word.
 fn check_against_oracle(
-    code: &TgrsCode<Gf8>,
-    decoder: &contort::TgrsDecoder<Gf8>,
+    code: &TgrsCode<Gf8B>,
+    decoder: &contort::TgrsDecoder<Gf8B>,
     received: &[Elem],
 ) {
     let mut scratch = TgrsScratch::new();
@@ -118,7 +118,7 @@ fn check_against_oracle(
 
 /// Received words derived from a codeword plus 0..=`max_errors` deterministic
 /// errors, followed by a few arbitrary words.
-fn probe_words(code: &TgrsCode<Gf8>, message: &[Elem], max_errors: usize) -> Vec<Vec<Elem>> {
+fn probe_words(code: &TgrsCode<Gf8B>, message: &[Elem], max_errors: usize) -> Vec<Vec<Elem>> {
     let n = code.length();
     let mut codeword = vec![Elem::ZERO; n];
     code.encode_into(message, &mut codeword).unwrap();
@@ -142,7 +142,7 @@ fn probe_words(code: &TgrsCode<Gf8>, message: &[Elem], max_errors: usize) -> Vec
 #[test]
 fn single_twist_matches_oracle_on_subspace_domain() {
     let n = 8;
-    let domain = EvaluationDomain::<Gf8>::additive_subspace(n).unwrap();
+    let domain = EvaluationDomain::<Gf8B>::additive_subspace(n).unwrap();
     let twists = vec![Twist::new(1, 0, e(2))];
     let code = TgrsCode::new(domain, ramp_multipliers(n), 2, twists).unwrap();
     let decoder = code
@@ -158,7 +158,7 @@ fn single_twist_matches_oracle_on_subspace_domain() {
 fn single_twist_matches_oracle_on_arbitrary_domain() {
     let n = 8;
     let points: Vec<Elem> = (1..=n as u8).map(e).collect();
-    let domain = EvaluationDomain::<Gf8>::arbitrary(points).unwrap();
+    let domain = EvaluationDomain::<Gf8B>::arbitrary(points).unwrap();
     let twists = vec![Twist::new(2, 1, e(3))];
     let code = TgrsCode::new(domain, ramp_multipliers(n), 2, twists).unwrap();
     // k' = k + max t = 2 + 2 = 4; keep the radius feasible for this geometry.
@@ -174,7 +174,7 @@ fn single_twist_matches_oracle_on_arbitrary_domain() {
 #[test]
 fn repeated_destination_twists_match_oracle() {
     let n = 8;
-    let domain = EvaluationDomain::<Gf8>::additive_subspace(n).unwrap();
+    let domain = EvaluationDomain::<Gf8B>::additive_subspace(n).unwrap();
     // Both twists land on degree k-1+1 = 2 and must accumulate.
     let twists = vec![Twist::new(1, 0, e(2)), Twist::new(1, 1, e(5))];
     let code = TgrsCode::new(domain, ramp_multipliers(n), 2, twists).unwrap();
@@ -191,7 +191,7 @@ fn repeated_destination_twists_match_oracle() {
 #[test]
 fn no_twists_reduces_to_grs() {
     let n = 8;
-    let domain = EvaluationDomain::<Gf8>::additive_subspace(n).unwrap();
+    let domain = EvaluationDomain::<Gf8B>::additive_subspace(n).unwrap();
     let code = TgrsCode::new(domain, ramp_multipliers(n), 2, Vec::new()).unwrap();
     assert_eq!(code.pseudo_dimension(), code.dimension());
     let decoder = code
@@ -206,7 +206,7 @@ fn no_twists_reduces_to_grs() {
 #[test]
 fn unit_multipliers_match_oracle() {
     let n = 8;
-    let domain = EvaluationDomain::<Gf8>::additive_subspace(n).unwrap();
+    let domain = EvaluationDomain::<Gf8B>::additive_subspace(n).unwrap();
     let twists = vec![Twist::new(1, 0, e(2))];
     let code = TgrsCode::new(domain, vec![Elem::ONE; n], 2, twists).unwrap();
     let decoder = code
@@ -221,7 +221,7 @@ fn unit_multipliers_match_oracle() {
 #[test]
 fn round_trip_is_lossless() {
     let n = 8;
-    let domain = EvaluationDomain::<Gf8>::additive_subspace(n).unwrap();
+    let domain = EvaluationDomain::<Gf8B>::additive_subspace(n).unwrap();
     let twists = vec![Twist::new(1, 0, e(2))];
     let code = TgrsCode::new(domain, ramp_multipliers(n), 2, twists).unwrap();
     let decoder = code
@@ -248,7 +248,7 @@ fn round_trip_is_lossless() {
 #[test]
 fn construction_rejects_bad_parameters() {
     let n = 8;
-    let subspace = || EvaluationDomain::<Gf8>::additive_subspace(n).unwrap();
+    let subspace = || EvaluationDomain::<Gf8B>::additive_subspace(n).unwrap();
 
     assert_eq!(
         TgrsCode::new(subspace(), ramp_multipliers(n - 1), 2, Vec::new()).unwrap_err(),
@@ -342,7 +342,7 @@ fn construction_rejects_bad_parameters() {
 #[test]
 fn io_length_checks() {
     let n = 8;
-    let domain = EvaluationDomain::<Gf8>::additive_subspace(n).unwrap();
+    let domain = EvaluationDomain::<Gf8B>::additive_subspace(n).unwrap();
     let code = TgrsCode::new(domain, ramp_multipliers(n), 2, vec![Twist::new(1, 0, e(2))]).unwrap();
 
     let mut codeword = vec![Elem::ZERO; n];

@@ -122,11 +122,7 @@ impl<F: ButterflyKernels> InterleavedRsCode<F> {
         if messages.len() != ell * k {
             return Err(Error::MessageCount {
                 expected: ell,
-                got: if k == 0 {
-                    messages.len()
-                } else {
-                    messages.len() / k
-                },
+                got: messages.len().checked_div(k).unwrap_or(messages.len()),
             });
         }
         if codeword.len() != ell * n {

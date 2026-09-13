@@ -5,7 +5,8 @@ use alloc::vec::Vec;
 
 use butterfly_fft::core::kernel::ButterflyKernels;
 use fgf::field::Elem;
-use gs_engine::{AlekhnovichLimits, EvaluationDomain, ParameterLimits, Polynomial};
+use gs_engine::{EvaluationDomain, ParameterLimits};
+use poly_ring::{AlekhnovichLimits, Polynomial};
 
 use crate::decode::TgrsDecoder;
 use crate::error::Error;

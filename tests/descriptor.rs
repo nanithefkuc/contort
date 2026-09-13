@@ -7,25 +7,26 @@
 use std::collections::HashSet;
 
 use contort::{
-    AlekhnovichLimits, BaseCode, BaseGeometry, DecoderCapability, Error, EvaluationDomain,
-    ExtendCoord, ExtendedGrsCode, MobiusGrsCode, MobiusMap, ParameterLimits, Polynomial,
-    PuncturedGrsCode, TgrsCode, TransformOp, TransformWord, Twist,
+    BaseCode, BaseGeometry, DecoderCapability, Error, ExtendCoord, ExtendedGrsCode, MobiusGrsCode,
+    MobiusMap, PuncturedGrsCode, TgrsCode, TransformOp, TransformWord, Twist,
 };
 use fgf::field::Elem as _;
-use fgf::gf8::Elem;
+use fgf::gf8b::Elem;
 use fgf::gf16::Elem as Elem16;
-use fgf::{Gf8, Gf16};
+use fgf::{Gf8B, Gf16};
 use gs_engine::ConfigError;
+use gs_engine::{EvaluationDomain, ParameterLimits};
+use poly_ring::{AlekhnovichLimits, Polynomial};
 
 fn e(value: u8) -> Elem {
-    Elem(value)
+    Elem::from_raw(value)
 }
 
 fn e16(value: u16) -> Elem16 {
-    Elem16(value)
+    Elem16::from_raw(value)
 }
 
-fn domain(n: usize) -> EvaluationDomain<Gf8> {
+fn domain(n: usize) -> EvaluationDomain<Gf8B> {
     EvaluationDomain::arbitrary((1..=n as u8).map(e).collect()).unwrap()
 }
 
@@ -33,7 +34,7 @@ fn multipliers(n: usize) -> Vec<Elem> {
     (1..=n as u8).map(e).collect()
 }
 
-fn base(id: u64) -> BaseCode<Gf8> {
+fn base(id: u64) -> BaseCode<Gf8B> {
     BaseCode::with_id(id, domain(8), multipliers(8), 2).unwrap()
 }
 
@@ -45,7 +46,7 @@ fn root_limits() -> AlekhnovichLimits {
     AlekhnovichLimits::new(1_000_000, 100_000, usize::MAX, usize::MAX, 128)
 }
 
-fn decoded(candidates: &[Polynomial<Gf8>], k: usize) -> Vec<Vec<Elem>> {
+fn decoded(candidates: &[Polynomial<Gf8B>], k: usize) -> Vec<Vec<Elem>> {
     let mut values: Vec<Vec<Elem>> = candidates
         .iter()
         .map(|candidate| (0..k).map(|degree| candidate.coefficient(degree)).collect())
@@ -54,7 +55,7 @@ fn decoded(candidates: &[Polynomial<Gf8>], k: usize) -> Vec<Vec<Elem>> {
     values
 }
 
-fn assert_compresses(word: &TransformWord<Gf8>, strict: bool) {
+fn assert_compresses(word: &TransformWord<Gf8B>, strict: bool) {
     let descriptor = word.normalize().unwrap();
     assert!(
         descriptor.serialized_len() <= word.serialized_len(),
@@ -288,15 +289,15 @@ fn word_and_descriptor_decoders_return_identical_lists() {
 
 #[test]
 fn mobius_group_law_scale_and_three_transitivity() {
-    let first = MobiusMap::<Gf8>::new(e(2), e(1), e(0), e(1));
-    let second = MobiusMap::<Gf8>::new(e(1), e(0), e(1), e(200));
+    let first = MobiusMap::<Gf8B>::new(e(2), e(1), e(0), e(1));
+    let second = MobiusMap::<Gf8B>::new(e(1), e(0), e(1), e(200));
     let net = second.compose(&first);
     for point in (1..=8).map(e) {
         assert_eq!(net.apply(point), second.apply(first.apply(point).unwrap()));
     }
 
     let scale = e(9);
-    let scaled = MobiusMap::<Gf8>::new(
+    let scaled = MobiusMap::<Gf8B>::new(
         first.a().mul(scale),
         first.b().mul(scale),
         first.c().mul(scale),
@@ -304,7 +305,7 @@ fn mobius_group_law_scale_and_three_transitivity() {
     );
     assert_eq!(first.normalized(), scaled.normalized());
 
-    let representative = MobiusMap::<Gf8>::from_three_points(e(1), e(2), e(3));
+    let representative = MobiusMap::<Gf8B>::from_three_points(e(1), e(2), e(3));
     assert_eq!(representative.apply(e(1)), Some(Elem::ZERO));
     assert_eq!(representative.apply(e(2)), Some(Elem::ONE));
     assert_eq!(representative.apply(e(3)), None);

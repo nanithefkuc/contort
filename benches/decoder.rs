@@ -10,10 +10,10 @@
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use std::hint::black_box;
 
-use contort::{
-    AlekhnovichLimits, EvaluationDomain, ParameterLimits, Polynomial, RothLempelCode,
-    RothLempelScratch, TgrsCode, TgrsScratch, Twist,
-};
+use poly_ring::{AlekhnovichLimits, Polynomial};
+
+use contort::{RothLempelCode, RothLempelScratch, TgrsCode, TgrsScratch, Twist};
+use gs_engine::{EvaluationDomain, ParameterLimits};
 
 fn parameter_limits() -> ParameterLimits {
     ParameterLimits::new(8, 16, usize::MAX, usize::MAX)
@@ -24,16 +24,16 @@ fn root_limits() -> AlekhnovichLimits {
 }
 
 fn bench_gf8(criterion: &mut Criterion) {
-    use fgf::Gf8;
-    use fgf::gf8::Elem;
-    let e = |v: u8| Elem(v);
+    use fgf::Gf8B;
+    use fgf::gf8b::Elem;
+    let e = |v: u8| Elem::from_raw(v);
     let n = 8usize;
     let k = 2usize;
     let tau = 3usize;
     let multipliers: Vec<Elem> = (0..n).map(|i| e((i + 1) as u8)).collect();
 
     // TGRS
-    let tgrs = TgrsCode::<Gf8>::new(
+    let tgrs = TgrsCode::<Gf8B>::new(
         EvaluationDomain::arbitrary((0..n as u8).map(e).collect()).unwrap(),
         multipliers.clone(),
         k,
@@ -42,20 +42,20 @@ fn bench_gf8(criterion: &mut Criterion) {
     .unwrap();
     let mut codeword = vec![Elem::ZERO; n];
     tgrs.encode_into(&[e(5), e(7)], &mut codeword).unwrap();
-    codeword[0] = Elem(codeword[0].0 ^ 1);
-    codeword[3] = Elem(codeword[3].0 ^ 1);
+    codeword[0] = Elem::from_raw(codeword[0].to_raw() ^ 1);
+    codeword[3] = Elem::from_raw(codeword[3].to_raw() ^ 1);
     let tgrs_decoder = tgrs
         .list_decoder(tau, parameter_limits(), root_limits())
         .unwrap();
-    let mut tgrs_scratch = TgrsScratch::<Gf8>::new();
+    let mut tgrs_scratch = TgrsScratch::<Gf8B>::new();
     tgrs_decoder.prepare_scratch(&mut tgrs_scratch).unwrap();
-    let mut tgrs_output: Vec<Polynomial<Gf8>> = Vec::new();
+    let mut tgrs_output: Vec<Polynomial<Gf8B>> = Vec::new();
     tgrs_decoder
         .list_decode_into(&codeword, &mut tgrs_scratch, &mut tgrs_output)
         .unwrap();
 
     // Roth–Lempel
-    let rl = RothLempelCode::<Gf8>::new(
+    let rl = RothLempelCode::<Gf8B>::new(
         EvaluationDomain::arbitrary((1..n as u8).map(e).collect()).unwrap(),
         multipliers,
         k,
@@ -64,14 +64,14 @@ fn bench_gf8(criterion: &mut Criterion) {
     .unwrap();
     let mut rl_codeword = vec![Elem::ZERO; n];
     rl.encode_into(&[e(5), e(7)], &mut rl_codeword).unwrap();
-    rl_codeword[0] = Elem(rl_codeword[0].0 ^ 1);
-    rl_codeword[3] = Elem(rl_codeword[3].0 ^ 1);
+    rl_codeword[0] = Elem::from_raw(rl_codeword[0].to_raw() ^ 1);
+    rl_codeword[3] = Elem::from_raw(rl_codeword[3].to_raw() ^ 1);
     let rl_decoder = rl
         .list_decoder(tau, parameter_limits(), root_limits())
         .unwrap();
-    let mut rl_scratch = RothLempelScratch::<Gf8>::new();
+    let mut rl_scratch = RothLempelScratch::<Gf8B>::new();
     rl_decoder.prepare_scratch(&mut rl_scratch).unwrap();
-    let mut rl_output: Vec<Polynomial<Gf8>> = Vec::new();
+    let mut rl_output: Vec<Polynomial<Gf8B>> = Vec::new();
     rl_decoder
         .list_decode_into(&rl_codeword, &mut rl_scratch, &mut rl_output)
         .unwrap();
@@ -116,7 +116,7 @@ fn bench_gf8(criterion: &mut Criterion) {
 fn bench_gf16(criterion: &mut Criterion) {
     use fgf::Gf16;
     use fgf::gf16::Elem;
-    let e = |v: u8| Elem(u16::from(v));
+    let e = |v: u8| Elem::from_raw(u16::from(v));
     let n = 16usize;
     let k = 2usize;
     let tau = 6usize;
@@ -132,7 +132,7 @@ fn bench_gf16(criterion: &mut Criterion) {
     let mut codeword = vec![Elem::ZERO; n];
     tgrs.encode_into(&[e(5), e(7)], &mut codeword).unwrap();
     for slot in codeword[..4].iter_mut() {
-        *slot = Elem(slot.0 ^ 1);
+        *slot = Elem::from_raw(slot.to_raw() ^ 1);
     }
     let tgrs_decoder = tgrs
         .list_decoder(tau, parameter_limits(), root_limits())
@@ -154,7 +154,7 @@ fn bench_gf16(criterion: &mut Criterion) {
     let mut rl_codeword = vec![Elem::ZERO; n];
     rl.encode_into(&[e(5), e(7)], &mut rl_codeword).unwrap();
     for slot in rl_codeword[..4].iter_mut() {
-        *slot = Elem(slot.0 ^ 1);
+        *slot = Elem::from_raw(slot.to_raw() ^ 1);
     }
     let rl_decoder = rl
         .list_decoder(tau, parameter_limits(), root_limits())

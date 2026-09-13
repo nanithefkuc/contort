@@ -389,7 +389,7 @@ impl<F: ButterflyKernels> TransformWord<F> {
             }
         }
 
-        twists.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+        twists.sort_by_key(|&(offset, hook, _)| (offset, hook));
         punctures.sort_unstable();
         let twist_ops: Vec<Twist<F>> = twists
             .iter()

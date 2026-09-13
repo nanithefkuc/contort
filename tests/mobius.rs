@@ -9,15 +9,14 @@
 //! so its list must equal the moved-point list as a set.
 //! Steady-state allocation behaviour is proven in `tests/zero_alloc.rs`.
 
-use contort::{
-    AlekhnovichLimits, Error, EvaluationDomain, MobiusGrsCode, MobiusGrsScratch, MobiusMap,
-    ParameterLimits, Polynomial, UniqueDecode,
-};
-use fgf::Gf8;
-use fgf::gf8::Elem;
+use contort::{Error, MobiusGrsCode, MobiusGrsScratch, MobiusMap, UniqueDecode};
+use fgf::Gf8B;
+use fgf::gf8b::Elem;
+use gs_engine::{EvaluationDomain, ParameterLimits};
+use poly_ring::{AlekhnovichLimits, Polynomial};
 
 fn e(byte: u8) -> Elem {
-    Elem(byte)
+    Elem::from_raw(byte)
 }
 
 fn parameter_limits() -> ParameterLimits {
@@ -32,7 +31,7 @@ fn ramp_multipliers(n: usize) -> Vec<Elem> {
     (0..n).map(|i| e((i + 1) as u8)).collect()
 }
 
-fn arbitrary_domain(n: usize) -> EvaluationDomain<Gf8> {
+fn arbitrary_domain(n: usize) -> EvaluationDomain<Gf8B> {
     let points: Vec<Elem> = (1..=n as u8).map(e).collect();
     EvaluationDomain::arbitrary(points).unwrap()
 }
@@ -43,7 +42,7 @@ fn hamming(a: &[Elem], b: &[Elem]) -> usize {
 
 /// Every message whose codeword is within `tau` of `received`, as sorted
 /// coefficient vectors.
-fn brute_force_ball(code: &MobiusGrsCode<Gf8>, received: &[Elem], tau: usize) -> Vec<Vec<Elem>> {
+fn brute_force_ball(code: &MobiusGrsCode<Gf8B>, received: &[Elem], tau: usize) -> Vec<Vec<Elem>> {
     let k = code.dimension();
     let n = code.length();
     let mut ball = Vec::new();
@@ -78,7 +77,7 @@ fn brute_force_ball(code: &MobiusGrsCode<Gf8>, received: &[Elem], tau: usize) ->
     ball
 }
 
-fn decoded_messages(candidates: &[Polynomial<Gf8>], k: usize) -> Vec<Vec<Elem>> {
+fn decoded_messages(candidates: &[Polynomial<Gf8B>], k: usize) -> Vec<Vec<Elem>> {
     let mut messages: Vec<Vec<Elem>> = candidates
         .iter()
         .map(|poly| (0..k).map(|d| poly.coefficient(d)).collect())
@@ -89,7 +88,7 @@ fn decoded_messages(candidates: &[Polynomial<Gf8>], k: usize) -> Vec<Vec<Elem>> 
 
 /// Received words: a codeword plus 0..=`max_errors` deterministic errors, then
 /// a couple of arbitrary words.
-fn probe_words(code: &MobiusGrsCode<Gf8>, message: &[Elem], max_errors: usize) -> Vec<Vec<Elem>> {
+fn probe_words(code: &MobiusGrsCode<Gf8B>, message: &[Elem], max_errors: usize) -> Vec<Vec<Elem>> {
     let n = code.length();
     let mut codeword = vec![Elem::ZERO; n];
     code.encode_into(message, &mut codeword).unwrap();
@@ -108,7 +107,7 @@ fn probe_words(code: &MobiusGrsCode<Gf8>, message: &[Elem], max_errors: usize) -
 }
 
 /// A map with `c ≠ 0` whose pole `d/c = 200` avoids the domain `1..=8`.
-fn affine_pole_free_map() -> MobiusMap<Gf8> {
+fn affine_pole_free_map() -> MobiusMap<Gf8B> {
     MobiusMap::new(e(1), e(1), e(1), e(200))
 }
 
