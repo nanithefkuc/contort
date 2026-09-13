@@ -16,7 +16,7 @@ simd = ["std", "poly-ring/simd", "gs-engine/simd", "fgf/simd", "butterfly-fft/si
 internals = []
 
 [dependencies]
-gs-engine = { git = "https://github.com/nanithefkuc/gs-engine", rev = "2f51e8fb9fecef5b713c6b6f94b68faa5abf6bdd", default-features = false }
+gs-engine = { git = "https://github.com/nanithefkuc/gs-engine", rev = "7d45c830673f58988adddbb8680a7f324ce566b0", default-features = false }
 # The same landed field/transform/ring sources the engine resolves, so one
 # copy of each compiles across the closure.
 poly-ring = { git = "https://github.com/nanithefkuc/poly-ring", rev = "48f7e8fe8a2f637e18c4fbd241849461404e21c2", default-features = false, features = ["fft"] }
