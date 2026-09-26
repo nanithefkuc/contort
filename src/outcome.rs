@@ -1,6 +1,6 @@
 //! Shared unique-decode outcome for the deformed Reed–Solomon families.
 
-use butterfly_fft::core::kernel::ButterflyKernels;
+use butterfly_fft::kernel::ButterflyKernels;
 use poly_ring::Polynomial;
 
 /// Result of a unique decode.

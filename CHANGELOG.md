@@ -7,6 +7,14 @@ and releases follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Tracks the `gs-engine` revision carrying the `polymat` reduction cutover;
+  the whole closure resolves one `fgf`/`butterfly-fft`/`poly-ring` copy at
+  the landed releases, and kernel paths take the merged
+  `butterfly_fft::kernel` module with destination-first `encode`/`decode`
+  element accessors.
+
 - Renamed the crate from `twister` to `contort` and scoped it to the deformed
   Reed–Solomon family (twisted / folded / interleaved GRS, Roth–Lempel).
 - Retargeted list decoding onto `gs-engine`; removed the self-contained

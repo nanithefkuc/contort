@@ -5,7 +5,7 @@
 //! slice needs no intermediate `Polynomial` and no heap, which is what the
 //! folded and interleaved encoders rely on for a zero-allocation steady state.
 
-use butterfly_fft::core::kernel::ButterflyKernels;
+use butterfly_fft::kernel::ButterflyKernels;
 use fgf::field::Elem;
 
 /// Evaluate the polynomial with the given low-to-high `coefficients` at `point`

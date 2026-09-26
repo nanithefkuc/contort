@@ -29,7 +29,7 @@
 use alloc::vec;
 use alloc::vec::Vec;
 
-use butterfly_fft::core::kernel::ButterflyKernels;
+use butterfly_fft::kernel::ButterflyKernels;
 use fgf::field::Elem;
 use gs_engine::{ConfigError, EvaluationDomain};
 
@@ -868,5 +868,5 @@ fn overflow(context: &'static str) -> Error {
 fn push_elem<F: ButterflyKernels>(buffer: &mut Vec<u8>, value: F::Elem) {
     let start = buffer.len();
     buffer.resize(start + F::BYTES, 0);
-    F::write(&mut buffer[start..], value);
+    F::encode(&mut buffer[start..], value);
 }

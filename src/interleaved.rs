@@ -14,7 +14,7 @@
 
 use alloc::vec::Vec;
 
-use butterfly_fft::core::kernel::ButterflyKernels;
+use butterfly_fft::kernel::ButterflyKernels;
 use fgf::field::Elem;
 use gs_engine::EvaluationDomain;
 
